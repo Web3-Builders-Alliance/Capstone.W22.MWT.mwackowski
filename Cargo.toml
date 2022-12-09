@@ -1,5 +1,5 @@
 [package]
-name = "wladzioo-boilerplate"
+name = "cw-boilerplate"
 version = "0.1.0"
 authors = ["wladzioo <wackowski.m@gmail.com>"]
 edition = "2021"

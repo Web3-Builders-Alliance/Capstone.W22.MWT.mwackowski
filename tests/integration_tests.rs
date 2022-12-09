@@ -1,6 +1,6 @@
 mod helpers;
-use wladzioo_boilerplate::msg as msg;
-use wladzioo_boilerplate::contract as contract;
+use cw_boilerplate::msg;
+use cw_boilerplate::contract;
 
 #[cfg(test)]
 mod tests {
@@ -70,8 +70,8 @@ mod tests {
             let msg = ExecuteMsg::Increment {};
             let cosmos_msg = cw_template_contract.call(msg).unwrap();
             app.execute(Addr::unchecked(USER), cosmos_msg).unwrap();
-            
-            let cosmos_msg = cw_template_contract.count().unwrap();
+            // TODO - assert if count works properly
+            // let cosmos_msg = cw_template_contract.count().unwrap();
             
         }
     }

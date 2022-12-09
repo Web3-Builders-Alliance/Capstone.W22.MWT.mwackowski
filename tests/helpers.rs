@@ -5,7 +5,7 @@ use cosmwasm_std::{
     to_binary, Addr, CosmosMsg, CustomQuery, Querier, QuerierWrapper, StdResult, WasmMsg, WasmQuery,
 };
 
-use wladzioo_boilerplate::msg::{ExecuteMsg, GetCountResponse, QueryMsg};
+use cw_boilerplate::msg::{ExecuteMsg, GetCountResponse, QueryMsg};
 
 /// CwTemplateContract is a wrapper around Addr that provides a lot of helpers
 /// for working with this.
