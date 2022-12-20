@@ -1,0 +1,1 @@
+799612dc4cbf04f7eca44ed4106014e4941d80cf3a1565f681fd5ab1a4f0a044  osmo_swap.wasm
