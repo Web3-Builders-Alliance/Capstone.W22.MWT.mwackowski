@@ -7,15 +7,17 @@ import assert from "assert";
 
 
 const rpcEndpoint= "https://rpc-test.osmosis.zone";
-
+// const rpcEndpoint = "https://rpc.testnet.osmosis.zone";
+// const rpcEndpoint = "https://lcd.osmo-test.ccvalidators.com/";
+// const rpcEndpoint = "https://testnet-rest.osmosis.zone/"
 const swap_wasm = fs.readFileSync("../artifacts/osmo_swap.wasm");
 
 const mnemonic =
 "steak indicate rice motor change pond clarify sign fade call umbrella fork";
 
-const swap_code_id = 4880;
+const swap_code_id = 4954;
 
-const swap_addr = "osmo1qydna99vxzx2fyrcsn8psugwctxtr5sxnxcajcy0300nd7fr3d3qa8pgzm";
+const swap_addr = "osmo14lhpghzuu8c97wpur4ykksew8g6l504nev5uhhxgpc9phyvllzjsaud2sh";
 
 
 async function setupClient(mnemonic: string, rpc: string, gas: string | undefined): Promise<SigningCosmWasmClient> {
@@ -88,7 +90,7 @@ describe("swap Fullstack Test", () => {
     xit("2. Instantiate contract code on testnet", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
             let res = await client.instantiate(await getAddress(mnemonic), swap_code_id, 
-            {}, "messages", "auto");
+            {debug: true}, "messages", "auto");
 
         //InstantiateMsg {name: String, symbol: String, decimals: u8, initial_balances: Vec<Cw20Coin>, mint: Option<MinterResponse>, marketing: Option<InstantiateMarketingInfo>,}
         //  Cw20Coin {address: String, amount: Uint128,}
@@ -98,14 +100,25 @@ describe("swap Fullstack Test", () => {
             console.log("------------EVENTS[%s]-----------------",i);
             console.log(res.logs[0].events[i]);          
         };
-    }).timeout(100000);
+    }).timeout(60000);
 
     it("3. Query pool", async () => {
             let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-            let res = await client.queryContractSmart(swap_addr, { pool_state : {id: 1}});
+            let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 1}});
 
             console.log(res);
+            console.log("------------assets-----------------");
+            console.log(res['pool']['pool_assets']);
         }).timeout(100000);
+
+    xit("4. Query pool params", async () => {
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
+        let res = await client.queryContractSmart(swap_addr, { query_pool_params : {pool_id: 1}});
+
+        console.log(res);
+        console.log("------------assets-----------------");
+        console.log(res['pool']['pool_assets']);
+    }).timeout(100000);
 
     // xit("4. Mint some on cw20 contract code on testnet", async () => {
     //     let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");

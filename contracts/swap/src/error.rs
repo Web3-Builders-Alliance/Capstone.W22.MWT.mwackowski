@@ -20,16 +20,16 @@ pub enum OsmosisError {
     #[error("{0}")]
     Overflow(#[from] cosmwasm_std::OverflowError),
 
-    #[error("Asset not in pool")]
-    AssetNotInPool,
+    // #[error("Asset not in pool")]
+    // AssetNotInPool,
 
-    #[error("Aborting swap - payout: {0} is smaller then minimal output: {1}")]
-    PriceTooLowExactIn(Uint128, Uint128),
+    // #[error("Aborting swap - payout: {0} is smaller then minimal output: {1}")]
+    // PriceTooLowExactIn(Uint128, Uint128),
 
-    #[error("Aborting swap - payin: {0} is bigger then maximum input: {1}")]
-    PriceTooLowExactOut(Uint128, Uint128),
+    // #[error("Aborting swap - payin: {0} is bigger then maximum input: {1}")]
+    // PriceTooLowExactOut(Uint128, Uint128),
 
-    /// Remove this to let the compiler find all TODOs
-    #[error("Not yet implemented (TODO)")]
-    Unimplemented,
+    // /// Remove this to let the compiler find all TODOs
+    // #[error("Not yet implemented (TODO)")]
+    // Unimplemented,
 }

@@ -2,9 +2,9 @@
 members = ["contracts/*"]
 resolver = "2"
 
-[profile.release.package.osmo-swap]
-codegen-units = 1
-incremental = false
+# [profile.release.package.osmo-swap]
+# codegen-units = 1
+# incremental = false
 
 exclude = [
   # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
@@ -23,7 +23,7 @@ incremental = false
 overflow-checks = true
 
 # use library feature to disable all instantiate/execute/query exports
-library = []
+# library = []
 
 [workspace.metadata.scripts]
 optimize = """docker run --rm -v "$(pwd)":/code \
