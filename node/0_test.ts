@@ -15,9 +15,9 @@ const swap_wasm = fs.readFileSync("../artifacts/osmo_swap.wasm");
 const mnemonic =
 "steak indicate rice motor change pond clarify sign fade call umbrella fork";
 
-const swap_code_id = 4954;
+const swap_code_id = 5042;
 
-const swap_addr = "osmo14lhpghzuu8c97wpur4ykksew8g6l504nev5uhhxgpc9phyvllzjsaud2sh";
+const swap_addr = "osmo1nk65030drsetxtxllpdwrual09xz869kplthzvwdp9r6setgjkfscqkp9e";
 
 
 async function setupClient(mnemonic: string, rpc: string, gas: string | undefined): Promise<SigningCosmWasmClient> {
@@ -72,7 +72,6 @@ describe("swap Fullstack Test", () => {
 
     xit("Balance Testnet Tokens", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-        let searchDenom: string = 'uosmo';
         let res = await client.getBalance(await getAddress(mnemonic), "uosmo");
         console.log(res);        
     }).timeout(100000);
@@ -102,7 +101,7 @@ describe("swap Fullstack Test", () => {
         };
     }).timeout(60000);
 
-    it("3. Query pool", async () => {
+    xit("3. Query pool", async () => {
             let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
             let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 1}});
 
@@ -113,45 +112,29 @@ describe("swap Fullstack Test", () => {
 
     xit("4. Query pool params", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-        let res = await client.queryContractSmart(swap_addr, { query_pool_params : {pool_id: 1}});
+        let res = await client.queryContractSmart(swap_addr, { query_pool_params : {pool_id: 2}});
 
         console.log(res);
-        console.log("------------assets-----------------");
-        console.log(res['pool']['pool_assets']);
+        // console.log("------------assets-----------------");
+        // console.log(res['pool']['pool_assets']);
     }).timeout(100000);
 
-    // xit("4. Mint some on cw20 contract code on testnet", async () => {
-    //     let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-    //     let res = await client.execute(minter_addr
-    //     , base_contract_address
-    //     , {mint : { recipient: user_addr, amount: "1000"}}
-    //     , "auto"
-    //     , "memo"
-    //     , []
-    //     ); 
+    xit("5. Query epoch info", async () => {
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
+        let res = await client.queryContractSmart(swap_addr, { query_epochs_info : {}});
+        console.log(res);
+    }).timeout(100000);
 
-    //     for (let i = 0; i<res.logs[0].events.length; i++) {
-    //         console.log("------------EVENTS[%s]-----------------",i);
-    //         console.log(res.logs[0].events[i]);          
-    //     };
-    // }).timeout(100000);
-    
-    // xit("6. Create allowance for a user on a cw20 contract on testnet", async () => {
-    //     // Increase allowance for the user that is going to create the stream. That is how the ExecuteMsg::SendFrom {owner,contract,amount,msg,}  is coded.
-    //     // Msg:        ExecuteMsg::IncreaseAllowance { spender: String,   amount: Uint128,   expires: Option<Expiration>,  }
-    //     let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-    //     let res = await client.execute(minter_addr
-    //     , base_contract_address
-    //     , {increase_allowance : { spender: user_addr, amount: "100"}}
-    //     , "auto"
-    //     , "memo"
-    //     , []
-    //     ); 
 
-    //     for (let i = 0; i<res.logs[0].events.length; i++) {
-    //         console.log("------------EVENTS[%s]-----------------",i);
-    //         console.log(res.logs[0].events[i]);
-    //     };
-    //     console.log(res);
-    // }).timeout(100000);
+    it("6. Query arithmetic twap", async () => {
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
+        let res = await client.queryContractSmart(swap_addr, {
+            query_arithmetic_twap_to_now : {
+                pool_id: 1,
+                quote_asset: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+                base_asset: "uosmo",
+                start_time: Date.now() - 1000
+        }});
+        console.log(res);
+    }).timeout(100000);
 });

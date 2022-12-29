@@ -46,6 +46,16 @@ pub enum QueryMsg {
     #[returns(QueryMapResponse)]
     QueryMap { key: String },
 }
+// #[cw_serde]
+// #[derive(QueryResponses)]
+// pub enum ResponseTypes{
+//     #[returns(QueryEpochsInfoResponse)]
+//     QueryEpochsInfoResponse,
+//     #[returns(QueryPoolParamsResponse)]
+//     QueryPoolParamsResponse,
+//     #[returns(QueryPoolResponse)]
+//     QueryPoolResponse
+// }
 
 #[cw_serde]
 pub struct QueryMapResponse {
