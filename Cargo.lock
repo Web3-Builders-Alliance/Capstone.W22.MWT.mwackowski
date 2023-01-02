@@ -564,7 +564,6 @@ dependencies = [
  "itertools",
  "jsonformat",
  "osmosis-std",
- "osmosis-std-derive",
  "schemars",
  "serde",
  "thiserror",

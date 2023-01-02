@@ -4,17 +4,19 @@ use std::fmt::Debug;
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     to_binary, to_vec, Binary, ContractResult, Deps, DepsMut, Empty, Env, MessageInfo, Reply,
-    Response, StdError, StdResult, SystemResult,
+    Response, StdError, StdResult, SystemResult, CosmosMsg,
 };
 use cw2::set_contract_version;
+use osmosis_std::shim::Timestamp;
+use osmosis_std::types::cosmos::base::v1beta1::Coin;
 use osmosis_std::types::osmosis::epochs::v1beta1::{
     QueryEpochsInfoRequest, QueryEpochsInfoResponse,
 };
 use osmosis_std::types::osmosis::gamm::v1beta1::{
     QueryNumPoolsRequest, QueryNumPoolsResponse, QueryPoolParamsRequest, QueryPoolParamsResponse,
-    QueryPoolRequest, QueryPoolResponse,
+    QueryPoolRequest, QueryPoolResponse, SwapAmountInRoute, MsgSwapExactAmountIn,
 };
-use osmosis_std::types::osmosis::twap::v1beta1::ArithmeticTwapToNowResponse;
+use osmosis_std::types::osmosis::twap::v1beta1::{ArithmeticTwapToNowResponse, TwapQuerier, ArithmeticTwapResponse};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -95,13 +97,43 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::QueryPoolParams { pool_id } => {
             query_and_debug::<QueryPoolParamsResponse>(&deps, QueryPoolParamsRequest { pool_id })
         }
-        QueryMsg::QueryArithmeticTwapToNow(arithmetic_twap_request) => {
-            query_and_debug::<ArithmeticTwapToNowResponse>(&deps, arithmetic_twap_request)
-        }
+        QueryMsg::QueryArithmeticTwap {pool_id, base_asset, quote_asset, start_time, end_time} 
+        => query_arithmetic_twap (
+            deps,
+            _env,
+            pool_id,
+            base_asset,
+            quote_asset,
+            start_time,
+            end_time
+    ),
         QueryMsg::QueryMap { key } => to_binary(&QueryMapResponse {
             value: MAP.load(deps.storage, key)?,
         }),
     }
+}
+
+
+pub fn query_arithmetic_twap(
+    deps: Deps,
+    _env: Env,
+    pool_id: u64,
+    base_asset: String,
+    quote_asset: String,
+    start_time: Option<Timestamp>,
+    end_time: Option<Timestamp>
+) -> StdResult<Binary> {
+    let res = TwapQuerier::new(&deps.querier).arithmetic_twap(
+        pool_id, 
+        base_asset,
+        quote_asset,
+        start_time,
+        end_time
+    )?;
+
+    to_binary(&ArithmeticTwapResponse {
+        arithmetic_twap: res.arithmetic_twap,
+    })
 }
 
 fn query_and_debug<T>(
@@ -161,4 +193,29 @@ pub fn reply(_deps: DepsMut, _env: Env, _msg: Reply) -> Result<Response, Contrac
     // See: https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md#dispatching-messages
 
     todo!()
+}
+
+
+pub fn execute_swap_exact_amount_in(
+    env: Env, 
+    routes: Vec<SwapAmountInRoute>,
+    token_in: Option<Coin>,
+    token_out_min_amount: String
+) -> Result<Response, ContractError> {
+    
+    let sender = env.contract.address.into();
+
+    // construct message and convet them into cosmos message
+    // (notice `CosmosMsg` type and `.into()`)
+    let msg_create_denom: CosmosMsg = MsgSwapExactAmountIn {
+        sender, 
+        routes, 
+        token_in,
+        token_out_min_amount 
+    }.into();
+    
+    Ok(Response::new()
+        .add_message(msg_create_denom)
+        .add_attribute("method", "try_create_denom"))
+    
 }

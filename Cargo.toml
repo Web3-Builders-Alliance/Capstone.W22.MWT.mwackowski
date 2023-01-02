@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/*"]
+members = ["contracts/*", "packages/*"]
 resolver = "2"
 
 # [profile.release.package.osmo-swap]
@@ -8,8 +8,8 @@ resolver = "2"
 
 exclude = [
   # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
-  "contract.wasm",
-  "hash.txt",]
+  "osmo_swap.wasm",
+  "checksums.txt",]
 
 [profile.release]
 opt-level = 3

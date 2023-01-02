@@ -1,9 +1,11 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
+use osmosis_std::shim::Timestamp;
 pub use osmosis_std::types::osmosis::epochs::v1beta1::QueryEpochsInfoResponse;
 pub use osmosis_std::types::osmosis::gamm::v1beta1::{
     QueryNumPoolsResponse, QueryPoolParamsResponse, QueryPoolResponse,
 };
+use osmosis_std::types::osmosis::twap::v1beta1::ArithmeticTwapResponse;
 pub use osmosis_std::types::osmosis::twap::v1beta1::{
     ArithmeticTwapToNowRequest, ArithmeticTwapToNowResponse,
 };
@@ -40,8 +42,13 @@ pub enum QueryMsg {
     #[returns(QueryPoolParamsResponse)]
     QueryPoolParams { pool_id: u64 },
 
-    #[returns(ArithmeticTwapToNowResponse)]
-    QueryArithmeticTwapToNow(ArithmeticTwapToNowRequest),
+    #[returns(ArithmeticTwapResponse)]
+    QueryArithmeticTwap{            
+        pool_id: u64,
+        base_asset: String,
+        quote_asset: String,
+        start_time: Option<Timestamp>,
+        end_time: Option<Timestamp>},
 
     #[returns(QueryMapResponse)]
     QueryMap { key: String },

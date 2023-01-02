@@ -15,10 +15,16 @@ const swap_wasm = fs.readFileSync("../artifacts/osmo_swap.wasm");
 const mnemonic =
 "steak indicate rice motor change pond clarify sign fade call umbrella fork";
 
-const swap_code_id = 5042;
+const swap_code_id = 5096;
 
-const swap_addr = "osmo1nk65030drsetxtxllpdwrual09xz869kplthzvwdp9r6setgjkfscqkp9e";
+const swap_addr = "osmo1fjwcwk70ztzz48fahev0qxhlnpwmsy60jdm83v2vnc7kyhh9ph7srytxfq";
+// #"osmo1fjwcwk70ztzz48fahev0qxhlnpwmsy60jdm83v2vnc7kyhh9ph7srytxfq";
 
+export interface Timestamp {
+    nanos: number;
+    seconds: number;
+    [k: string]: unknown;
+  }
 
 async function setupClient(mnemonic: string, rpc: string, gas: string | undefined): Promise<SigningCosmWasmClient> {
     if (gas === undefined) {
@@ -129,11 +135,12 @@ describe("swap Fullstack Test", () => {
     it("6. Query arithmetic twap", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
         let res = await client.queryContractSmart(swap_addr, {
-            query_arithmetic_twap_to_now : {
+            query_arithmetic_twap : {
                 pool_id: 1,
-                quote_asset: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
                 base_asset: "uosmo",
-                start_time: Date.now() - 1000
+                quote_asset: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+                start_time: "2022-12-31T13:40:58+00:00"
+                // start_time: `${new Date(1635209044000).toISOString().slice(0, 23)}`
         }});
         console.log(res);
     }).timeout(100000);
