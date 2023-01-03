@@ -1,7 +1,8 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
-use osmosis_std::shim::Timestamp;
+use osmosis_std::{shim::Timestamp, types::cosmos::base::v1beta1::Coin};
 pub use osmosis_std::types::osmosis::epochs::v1beta1::QueryEpochsInfoResponse;
+use osmosis_std::types::osmosis::gamm::v1beta1::SwapAmountInRoute;
 pub use osmosis_std::types::osmosis::gamm::v1beta1::{
     QueryNumPoolsResponse, QueryPoolParamsResponse, QueryPoolResponse,
 };
@@ -20,6 +21,11 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum ExecuteMsg {
     SetMap { key: String, value: String },
+    ExecuteSwapExactAmountIn {
+        routes: Vec<SwapAmountInRoute>,
+        token_in: Option<Coin>,
+        token_out_min_amount: String
+    }
 }
 
 /// Message type for `migrate` entry_point

@@ -66,7 +66,7 @@ pub fn migrate(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, C
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
@@ -78,6 +78,11 @@ pub fn execute(
             MAP.save(deps.storage, key, &value)?;
             Ok(Response::new().add_attribute("method", "set_map"))
         }
+        ExecuteMsg::ExecuteSwapExactAmountIn { 
+            routes, 
+            token_in, 
+            token_out_min_amount
+          } => execute_swap_exact_amount_in(env, routes, token_in, token_out_min_amount)
     }
 }
 
@@ -205,9 +210,7 @@ pub fn execute_swap_exact_amount_in(
     
     let sender = env.contract.address.into();
 
-    // construct message and convet them into cosmos message
-    // (notice `CosmosMsg` type and `.into()`)
-    let msg_create_denom: CosmosMsg = MsgSwapExactAmountIn {
+    let msg_create_swap: CosmosMsg = MsgSwapExactAmountIn {
         sender, 
         routes, 
         token_in,
@@ -215,7 +218,6 @@ pub fn execute_swap_exact_amount_in(
     }.into();
     
     Ok(Response::new()
-        .add_message(msg_create_denom)
-        .add_attribute("method", "try_create_denom"))
-    
+        .add_message(msg_create_swap)
+        .add_attribute("method", "execute_swap_exact_amount_in"))
 }

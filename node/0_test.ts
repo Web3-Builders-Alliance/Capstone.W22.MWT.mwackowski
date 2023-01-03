@@ -15,9 +15,9 @@ const swap_wasm = fs.readFileSync("../artifacts/osmo_swap.wasm");
 const mnemonic =
 "steak indicate rice motor change pond clarify sign fade call umbrella fork";
 
-const swap_code_id = 5096;
+const swap_code_id = 5102;
 
-const swap_addr = "osmo1fjwcwk70ztzz48fahev0qxhlnpwmsy60jdm83v2vnc7kyhh9ph7srytxfq";
+const swap_addr = "osmo1t2da8tmaszhcthvmkuxgm7e3sfjz22ydv299wkmgtdl62w6va9eslnkkpz";
 // #"osmo1fjwcwk70ztzz48fahev0qxhlnpwmsy60jdm83v2vnc7kyhh9ph7srytxfq";
 
 export interface Timestamp {
@@ -79,7 +79,9 @@ describe("swap Fullstack Test", () => {
     xit("Balance Testnet Tokens", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
         let res = await client.getBalance(await getAddress(mnemonic), "uosmo");
-        console.log(res);        
+        console.log(res);  
+        let res2 = await client.getBalance(await getAddress(mnemonic), 'ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2');
+        console.log(res2);   
     }).timeout(100000);
 
 
@@ -132,16 +134,93 @@ describe("swap Fullstack Test", () => {
     }).timeout(100000);
 
 
-    it("6. Query arithmetic twap", async () => {
+    xit("6. Query arithmetic twap", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
         let res = await client.queryContractSmart(swap_addr, {
             query_arithmetic_twap : {
                 pool_id: 1,
                 base_asset: "uosmo",
                 quote_asset: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
-                start_time: "2022-12-31T13:40:58+00:00"
+                start_time: "2023-01-03T13:35:58+00:00"
                 // start_time: `${new Date(1635209044000).toISOString().slice(0, 23)}`
         }});
         console.log(res);
+    }).timeout(100000);
+ 
+    it("7. swap exact amount in", async () => {
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
+
+        let out_denom = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2";
+        let res = await client.execute(await getAddress(mnemonic), 
+        swap_addr, { execute_swap_exact_amount_in: 
+            {
+                routes: [{pool_id: "1", 
+                        token_out_denom: out_denom}],
+                token_in: {amount: "10000", denom: "uosmo"}, 
+                token_out_min_amount: "2550"
+            }},
+
+        "auto", "", 
+        [{amount: "1000", denom: "uosmo"}]);
+        console.log(res);
+        console.log("\nxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
+        console.log(res['logs'][0]['events']);
+        let events = res['logs'][0]['events'];
+
+        for (const ev of events) {
+            console.log('---------------------------------');
+            console.log(ev.type.toUpperCase());
+            for (const val of ev.attributes) {
+                console.log(val);
+                };
+            console.log('\n');
+        };
+
+
+        // for (let i = 0; i<res['contracts'].length; i++) {
+        //     console.log("------------CONTRACTS[%s]-----------------", i);
+        //     console.log(res['contracts'][i]);
+        //     console.log("___________________________________________");
+        // }
+
+    }).timeout(100000);
+
+    xit("8. swap exact amount in", async () => {
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
+
+        let in_denom = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2";
+        let out_denom = "uosmo";
+        let res = await client.execute(await getAddress(mnemonic), 
+        swap_addr, { execute_swap_exact_amount_in: 
+            {
+                routes: [{pool_id: "1", 
+                        token_out_denom: out_denom}],
+                token_in: {amount: "38946", denom: in_denom}, 
+                token_out_min_amount: "2550"
+            }},
+
+        "auto", "", 
+        [{amount: "1000", denom: "uosmo"}]);
+        console.log(res);
+        console.log("\nxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
+        console.log(res['logs'][0]['events']);
+        let events = res['logs'][0]['events'];
+
+        for (const ev of events) {
+            console.log('---------------------------------');
+            console.log(ev.type.toUpperCase());
+            for (const val of ev.attributes) {
+                console.log(val);
+                };
+            console.log('\n');
+        };
+
+
+        // for (let i = 0; i<res['contracts'].length; i++) {
+        //     console.log("------------CONTRACTS[%s]-----------------", i);
+        //     console.log(res['contracts'][i]);
+        //     console.log("___________________________________________");
+        // }
+
     }).timeout(100000);
 });

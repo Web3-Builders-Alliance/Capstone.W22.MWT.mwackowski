@@ -1,1 +1,1 @@
-534a77c5524ad6ca2e0fa6505a4aea373f7f2d92a7589a6e448f08e6c7bdddcb  ./target/wasm32-unknown-unknown/release/osmo_swap.wasm
+b18b6f1448f0645ba94da5997da4eb8cafb975bf7e86296173fccb405127987e  ./target/wasm32-unknown-unknown/release/osmo_swap.wasm

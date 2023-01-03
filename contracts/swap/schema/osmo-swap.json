@@ -46,8 +46,82 @@
           }
         },
         "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "execute_swap_exact_amount_in"
+        ],
+        "properties": {
+          "execute_swap_exact_amount_in": {
+            "type": "object",
+            "required": [
+              "routes",
+              "token_out_min_amount"
+            ],
+            "properties": {
+              "routes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/SwapAmountInRoute"
+                }
+              },
+              "token_in": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Coin"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "token_out_min_amount": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
       }
-    ]
+    ],
+    "definitions": {
+      "Coin": {
+        "description": "Coin defines a token with a denomination and an amount.\n\nNOTE: The amount field is an Int which implements the custom method signatures required by gogoproto.",
+        "type": "object",
+        "required": [
+          "amount",
+          "denom"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "denom": {
+            "type": "string"
+          }
+        }
+      },
+      "SwapAmountInRoute": {
+        "description": "===================== MsgSwapExactAmountIn",
+        "type": "object",
+        "required": [
+          "pool_id",
+          "token_out_denom"
+        ],
+        "properties": {
+          "pool_id": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "token_out_denom": {
+            "type": "string"
+          }
+        }
+      }
+    }
   },
   "query": {
     "$schema": "http://json-schema.org/draft-07/schema#",

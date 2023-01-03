@@ -1,1 +1,1 @@
-0dd6ea50a7d2a2c49e72e908adff19f7f9281dbd13dadacf871d8938b83d58ac  osmo_swap.wasm
+bc0d5abfe7263da9ebd483ebc325a884226ee0aecc8034547ba41764e3d07764  osmo_swap.wasm

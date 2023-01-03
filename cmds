@@ -1,0 +1,3 @@
+cosmwasm-ts-codegen generate   --plugin client     --plugin message-composer   --schema ./schema   --out ./../../node   --name ./node_tests   --no-bundle
+
+curl     -X GET     -H "Content-Type: application/json"     https://osmosistest-lcd.quickapi.com/cosmos/bank/v1beta1/balances/osmo1t2da8tmaszhcthvmkuxgm7e3sfjz22ydv299wkmgtdl62w6va9eslnkkpz
