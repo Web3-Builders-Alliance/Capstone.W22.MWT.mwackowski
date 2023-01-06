@@ -109,9 +109,9 @@ describe("swap Fullstack Test", () => {
         };
     }).timeout(60000);
 
-    xit("3. Query pool", async () => {
+    it("3. Query pool", async () => {
             let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-            let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 1}});
+            let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 3}});
 
             console.log(res);
             console.log("------------assets-----------------");
@@ -120,7 +120,7 @@ describe("swap Fullstack Test", () => {
 
     xit("4. Query pool params", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-        let res = await client.queryContractSmart(swap_addr, { query_pool_params : {pool_id: 2}});
+        let res = await client.queryContractSmart(swap_addr, { query_pool_params : {pool_id: 4}});
 
         console.log(res);
         // console.log("------------assets-----------------");
@@ -147,7 +147,7 @@ describe("swap Fullstack Test", () => {
         console.log(res);
     }).timeout(100000);
  
-    it("7. swap exact amount in", async () => {
+    xit("7. swap exact amount in", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
 
         let out_denom = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2";
@@ -162,10 +162,11 @@ describe("swap Fullstack Test", () => {
 
         "auto", "", 
         [{amount: "1000", denom: "uosmo"}]);
+
         console.log(res);
         console.log("\nxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
-        console.log(res['logs'][0]['events']);
         let events = res['logs'][0]['events'];
+        console.log(events);
 
         for (const ev of events) {
             console.log('---------------------------------');
@@ -223,4 +224,5 @@ describe("swap Fullstack Test", () => {
         // }
 
     }).timeout(100000);
+
 });
