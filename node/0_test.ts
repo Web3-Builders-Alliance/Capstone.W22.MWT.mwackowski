@@ -109,9 +109,10 @@ describe("swap Fullstack Test", () => {
         };
     }).timeout(60000);
 
+    //https://rest.cosmos.directory/osmosis/ibc/apps/transfer/v1/denom_traces/E6931F78057F7CC5DA0FD6CEF82FF39373A6E0452BF1FD76910B93292CF356C1
     it("3. Query pool", async () => {
             let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-            let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 3}});
+            let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 2}});
 
             console.log(res);
             console.log("------------assets-----------------");
@@ -159,7 +160,6 @@ describe("swap Fullstack Test", () => {
                 token_in: {amount: "10000", denom: "uosmo"}, 
                 token_out_min_amount: "2550"
             }},
-
         "auto", "", 
         [{amount: "1000", denom: "uosmo"}]);
 
@@ -204,9 +204,9 @@ describe("swap Fullstack Test", () => {
         [{amount: "1000", denom: "uosmo"}]);
         console.log(res);
         console.log("\nxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
-        console.log(res['logs'][0]['events']);
-        let events = res['logs'][0]['events'];
 
+        let events = res['logs'][0]['events'];
+        console.log(events);
         for (const ev of events) {
             console.log('---------------------------------');
             console.log(ev.type.toUpperCase());
