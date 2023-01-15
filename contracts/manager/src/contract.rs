@@ -14,7 +14,7 @@ use cw_utils::{parse_reply_instantiate_data};
 use osmo_swap;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg};
+use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes};
 use crate::state::{State, CONTRACTS, DEPOSIT, LEDGER, Deposit, ETF_CACHE, Ledger};
 use osmosis_std::types::osmosis::gamm::v1beta1::SwapAmountInRoute;
 // use crate::etf_types::ETF_TYPES;
@@ -52,12 +52,12 @@ pub fn execute(
     match msg {
         ExecuteMsg::InstantiateSwap { code_id } 
             => instantiate_swap(deps, info, code_id),
-        ExecuteMsg::SwapTokens { contract, usdc_balance, etf_type} => try_execute_swap_exact_amount_in(
+        ExecuteMsg::SwapTokens { contract, initial_balance, etf_swap_routes} => try_execute_swap_exact_amount_in(
                 deps, 
                 contract, 
                 info.sender.to_string(), 
-                etf_type,
-                usdc_balance),
+                etf_swap_routes,
+                initial_balance),
     }
 }
 
@@ -74,17 +74,19 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> StdResult<Response> {
 // TODO
 // should I save owner as well?
 fn handle_instantiate_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
-    
+    println!(">>> handle_instantiate_reply: {:?}", msg);
     let res = parse_reply_instantiate_data(msg).unwrap();
     let state = State {
         address: res.contract_address.clone(),
     };
+    // TODO
+    // Implement loading contract within execute function
     CONTRACTS.save(deps.storage, (&MAP_KEY, &res.contract_address), &state)?;
     Ok(Response::default())
 }
 
 fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
-    println!(">>> handle_swap_reply msg: {:?}", msg);
+
     let result: String = msg.result.clone()
         .unwrap()
         .events.iter()
@@ -158,13 +160,6 @@ pub fn instantiate_swap(
         label: "osmo_swap".to_string(),
     };
 
-    /*let submessage:SubMsg = SubMsg {
-        gas_limit: None,
-        id: INSTANTIATE_REPLY_ID,
-        reply_on: ReplyOn::Success,
-        msg: instantiate_message.into()
-    };*/
-
     let submessage:SubMsg<Empty> = SubMsg::reply_on_success(instantiate_message, INSTANTIATE_REPLY_ID);
 
     Ok(Response::new().add_submessage(submessage))
@@ -175,30 +170,17 @@ pub fn try_execute_swap_exact_amount_in(
     deps: DepsMut, 
     contract: String,
     sender: String,
-    etf_type: String,
+    etf_swap_routes: EtfSwapRoutes,
     deposit: Coin,
     // tokens_to_swap: Vec<Coin>
 ) 
 -> Result<Response, ContractError> {
-
-    let etf_types: HashMap<&str, Vec<(&str, f32, u64)>> = HashMap::from([
-        ("first", vec![
-            ("uatom", 0.5, 1), 
-            ("uosmo", 0.5, 0)]),
-        ("second", vec![
-            ("uatom", 0.4, 1), 
-            ("uosmo", 0.3, 0), 
-            ("uakt", 0.3, 4)]),
-        ("third", vec![
-            ("uatom", 0.36, 1), 
-            ("uion", 0.32, 2), 
-            ("uakt", 0.32, 4 ),]),
-    ]);
-
+    // TODO
+    // add contract.load instead of passing it
 
     // let's keep track of user's deposited USDC
     DEPOSIT.save(deps.storage, &sender.clone(), &Deposit{
-        etf_type: etf_type.clone(), tokens: deposit.clone()
+        etf_type: etf_swap_routes.name.clone(), tokens: deposit.clone()
     })?;
     
     // TODO
@@ -206,8 +188,13 @@ pub fn try_execute_swap_exact_amount_in(
     // what if the user executes another swap? how to keep track of it?
     let token_out_denom;
     let pool_id;
+
+    // if !vec!["uosmo", "usdc"].iter().any(|&i| i == deposit.denom) {
+    //     return Err(ContractError::InvalidDepositDenom {val: deposit.denom.clone()});
+    // }
+
     if deposit.denom == "uosmo".to_string() {
-        token_out_denom = "uatom".to_string();
+        token_out_denom = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2".to_string();
         pool_id = 1;
     } else if deposit.denom == "usdc".to_string() {
         token_out_denom = "uosmo".to_string();
@@ -223,7 +210,7 @@ pub fn try_execute_swap_exact_amount_in(
     );
 
     let submessage:SubMsg<Empty> = SubMsg::reply_on_success(execute_message, EXECUTE_SWAP_REPLY_ID);
-    println!(">>> {:?}", submessage);
+    // println!(">>> {:?}", submessage);
 
     ETF_CACHE.save(deps.storage, &sender.to_string())?;
 
@@ -236,7 +223,7 @@ pub fn try_execute_swap_exact_amount_in(
     //     }
 
     //     let token_in;
-    //     unsafe { 
+    //     unsafe { 50/100
     //         token_in = Some(coin((deposit.clone().amount.u128() as f32 * ratio).floor().to_int_unchecked(), "uosmo").into());
     //     };
     //     let execute_message = create_execute_swap(
@@ -265,6 +252,7 @@ pub fn try_execute_swap_exact_amount_in(
 
     // let submessage:SubMsg<Empty> = SubMsg::reply_on_success(execute_message, EXECUTE_INCREMENT_REPLY_ID);
 
+    // Ok(Response::new().add_submessage(submessage))
     Ok(Response::new().add_submessage(submessage))
 }
 

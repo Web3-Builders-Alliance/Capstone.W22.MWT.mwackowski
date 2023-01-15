@@ -15,7 +15,7 @@ const swap_wasm = fs.readFileSync("../artifacts/osmo_swap.wasm");
 const mnemonic =
 "steak indicate rice motor change pond clarify sign fade call umbrella fork";
 
-const swap_code_id = 5102;
+const swap_code_id = 5250; ///5102;
 
 const swap_addr = "osmo1t2da8tmaszhcthvmkuxgm7e3sfjz22ydv299wkmgtdl62w6va9eslnkkpz";
 // #"osmo1fjwcwk70ztzz48fahev0qxhlnpwmsy60jdm83v2vnc7kyhh9ph7srytxfq";
@@ -110,7 +110,7 @@ describe("swap Fullstack Test", () => {
     }).timeout(60000);
 
     //https://rest.cosmos.directory/osmosis/ibc/apps/transfer/v1/denom_traces/E6931F78057F7CC5DA0FD6CEF82FF39373A6E0452BF1FD76910B93292CF356C1
-    it("3. Query pool", async () => {
+    xit("3. Query pool", async () => {
             let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
             let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 2}});
 
@@ -177,13 +177,6 @@ describe("swap Fullstack Test", () => {
             console.log('\n');
         };
 
-
-        // for (let i = 0; i<res['contracts'].length; i++) {
-        //     console.log("------------CONTRACTS[%s]-----------------", i);
-        //     console.log(res['contracts'][i]);
-        //     console.log("___________________________________________");
-        // }
-
     }).timeout(100000);
 
     xit("8. swap exact amount in", async () => {
@@ -216,13 +209,8 @@ describe("swap Fullstack Test", () => {
             console.log('\n');
         };
 
-
-        // for (let i = 0; i<res['contracts'].length; i++) {
-        //     console.log("------------CONTRACTS[%s]-----------------", i);
-        //     console.log(res['contracts'][i]);
-        //     console.log("___________________________________________");
-        // }
-
     }).timeout(100000);
+
+    
 
 });

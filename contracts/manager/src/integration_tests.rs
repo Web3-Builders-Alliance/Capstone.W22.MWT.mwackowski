@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::helpers::ManagerContract;
-    use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg};
+    use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes};
     use cosmwasm_std::{Addr, Coin, Empty, Uint128};
     use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
 
@@ -81,11 +81,11 @@ mod tests {
 
     //increment the counter from the manager contract
     fn swap(app: &mut App, manager_contract: &ManagerContract, contract_addr: String,
-    usdc_balance: Coin, etf_type: String) {
+    usdc_balance: Coin, etf_type: EtfSwapRoutes) {
         let msg = ExecuteMsg::SwapTokens { 
             contract: contract_addr, 
-            usdc_balance: usdc_balance, 
-            etf_type: etf_type };
+            initial_balance: usdc_balance, 
+            etf_swap_routes: etf_type };
 
         let cosmos_msg = manager_contract.call(msg).unwrap();
         app.execute(Addr::unchecked(USER), cosmos_msg).unwrap();

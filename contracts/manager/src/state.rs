@@ -18,7 +18,7 @@ pub struct Ledger {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Deposit {
     pub etf_type: String,
-    pub tokens: Coin // change into Coin later!
+    pub tokens: Coin
 }
 
 pub const CONTRACTS: Map<(&str, &str), State> = Map::new("contracts");
