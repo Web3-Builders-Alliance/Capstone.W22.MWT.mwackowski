@@ -15,6 +15,9 @@ pub enum ContractError {
     #[error("Invalid deposit denom: {val:?}")]
     InvalidDepositDenom {val: String},
 
+    #[error("Denom parsing error: {val:?}")]
+    DenomParsingError {val: String},
+
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
     // Add any other custom errors you like here.

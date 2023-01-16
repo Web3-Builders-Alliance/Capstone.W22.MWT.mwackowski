@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, WasmMsg, Reply, StdError, ReplyOn, Empty, Coin, Addr, coin,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, WasmMsg, Reply, StdError, Empty, Coin, coin,
 };
 
 use cw2::set_contract_version;
@@ -11,13 +9,12 @@ use cw2::set_contract_version;
 // use cw_multi_test::Executor;
 use cw_utils::{parse_reply_instantiate_data};
 
-use osmo_swap;
-
+use osmo_swap::msg::InstantiateMsg as InstantiatMsgOsmo;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes};
-use crate::state::{State, CONTRACTS, DEPOSIT, LEDGER, Deposit, ETF_CACHE, Ledger};
+use crate::state::{State, CONTRACTS, DEPOSIT, LEDGER, ETF_CACHE, Cache};
 use osmosis_std::types::osmosis::gamm::v1beta1::SwapAmountInRoute;
-// use crate::etf_types::ETF_TYPES;
+
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:counter_manager";
@@ -87,17 +84,39 @@ fn handle_instantiate_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
 
 fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
 
+    // Filter the result so that it returns single event value
     let result: String = msg.result.clone()
         .unwrap()
         .events.iter()
         .filter(|event| event.ty == "token_swapped" && event.attributes[4].key == "tokens_out")
         .map(|p| p.attributes[4].value.clone())
         .collect();
+    let (amount_swapped, denom_swapped) = split_result_no_regex(result.to_owned());
 
+    let cache = ETF_CACHE.load(deps.storage, 0u64).unwrap();
+    ETF_CACHE.remove(deps.storage, 0u64);
 
-    let sender = ETF_CACHE.load(deps.storage).unwrap();
-    ETF_CACHE.remove(deps.storage);
-    LEDGER.save(deps.storage, &sender, &Ledger{etf_type: result.to_string()})?;
+    let depo_key = (cache.sender.as_str(), cache.etf_name.as_str());
+    let deposit = DEPOSIT.load(deps.storage, depo_key)?;
+
+    // if LEDGER.has(deps.storage, depo_key.clone()){
+    //     let curr_ledger = LEDGER.load(deps.storage, depo_key).unwrap();  
+    //     for coin in curr_ledger.into_iter() {
+
+    //     }      
+    //     new_ledger = coin(curr_ledger.amount.checked_add(deposit.amount).unwrap().u128(),
+    //         curr_deposit.denom);
+    // } else {
+    //     new_deposit = deposit.clone();
+    // }
+
+    // LEDGER.save(deps.storage,  depo_key,  &new_deposit)?;
+
+    //sender, type
+    // LEDGER.save(deps.storage, &cache.sender, &Ledger{etf_type: cache.etf_name,
+    //     tokens: vec![coin(amount_swapped.parse::<u128>().unwrap(), denom_swapped.clone())]
+    //     }
+    // )?;
 
     // HERE THE LOGIC FOR VERIFYING IF EVERYTHING WENT THROUGH PROPERLY
     // IF SO, SAVE TO STATE
@@ -105,11 +124,14 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
     // where to keep this logic?
 
     Ok(Response::default()
-        .add_attribute("swapped_amount", result)
+        .add_attribute("swap_received_amount", amount_swapped)
+        .add_attribute("swap_received_denom", denom_swapped)
+        .add_attribute("deposit_denom", deposit.denom)
+        .add_attribute("total_deposit_amount", deposit.amount)
     )
  }
 
- fn handle_swaps_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
+ fn handle_swaps_reply(_deps: DepsMut, _msg: Reply) -> StdResult<Response> {
     unimplemented!()
  }
     
@@ -155,7 +177,7 @@ pub fn instantiate_swap(
     let instantiate_message = WasmMsg::Instantiate {
         admin: None,
         code_id,
-        msg: to_binary(&osmo_swap::msg::InstantiateMsg { debug: true })?,
+        msg: to_binary(&InstantiatMsgOsmo { debug: true })?,
         funds: vec![],
         label: "osmo_swap".to_string(),
     };
@@ -179,13 +201,19 @@ pub fn try_execute_swap_exact_amount_in(
     // add contract.load instead of passing it
 
     // let's keep track of user's deposited USDC
-    DEPOSIT.save(deps.storage, &sender.clone(), &Deposit{
-        etf_type: etf_swap_routes.name.clone(), tokens: deposit.clone()
-    })?;
+    let depo_key = (sender.as_str(), etf_swap_routes.name.as_str());
+    let new_deposit;
+
+    if DEPOSIT.has(deps.storage, depo_key.clone()){
+        let curr_deposit = DEPOSIT.load(deps.storage, depo_key).unwrap();        
+        new_deposit = coin(curr_deposit.amount.checked_add(deposit.amount).unwrap().u128(),
+            curr_deposit.denom);
+    } else {
+        new_deposit = deposit.clone();
+    }
+
+    DEPOSIT.save(deps.storage,  depo_key,  &new_deposit)?;
     
-    // TODO
-    // what if the user executes same swap more than once?
-    // what if the user executes another swap? how to keep track of it?
     let token_out_denom;
     let pool_id;
 
@@ -210,9 +238,7 @@ pub fn try_execute_swap_exact_amount_in(
     );
 
     let submessage:SubMsg<Empty> = SubMsg::reply_on_success(execute_message, EXECUTE_SWAP_REPLY_ID);
-    // println!(">>> {:?}", submessage);
-
-    ETF_CACHE.save(deps.storage, &sender.to_string())?;
+    ETF_CACHE.save(deps.storage, 0u64, &Cache { sender: sender.to_string(), etf_name: etf_swap_routes.name.to_string()})?;
 
     // let mut submessages = vec![];
     // for token in etf_types.get(&etf_type[..]).unwrap().iter() {
@@ -259,13 +285,13 @@ pub fn try_execute_swap_exact_amount_in(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetTokens {sender} => to_binary(&query_get_tokens(deps, sender)?),
+        QueryMsg::GetTokens {sender, etf_type} => to_binary(&query_get_tokens(deps, sender, etf_type)?),
     }
 }
 
-fn query_get_tokens(deps: Deps, sender: String) -> StdResult<GetTokensResponse> {
-    let res = LEDGER.load(deps.storage, &sender)?;
-    Ok(GetTokensResponse { tokens_per_etf: vec![res] })
+fn query_get_tokens(deps: Deps, sender: String, etf_type: String) -> StdResult<GetTokensResponse> {
+    let res = LEDGER.load(deps.storage, (&sender, &etf_type))?;
+    Ok(GetTokensResponse { tokens_per_etf: res })
 }
 
 fn create_execute_swap(contract: String, 
@@ -296,17 +322,29 @@ fn create_execute_swap(contract: String,
 
 ////////////////////////////
 //helper functions for parsing reply data
-fn get_contract_address(msg: &Reply) -> String {
-    let result:String = msg.result.clone()
-        .unwrap()
-        .events.iter()
-        .filter(|event| event.ty == "execute" && event.attributes[0].key == "_contract_address").map(|p| p.attributes[0].value.clone()).collect();
-    // println!("get_contract_address {:?}", &result);
-    result
-}
+// fn get_contract_address(msg: &Reply) -> String {
+//     let result:String = msg.result.clone()
+//         .unwrap()
+//         .events.iter()
+//         .filter(|event| event.ty == "execute" && event.attributes[0].key == "_contract_address").map(|p| p.attributes[0].value.clone()).collect();
+//     // println!("get_contract_address {:?}", &result);
+//     result
+// }
 
-fn get_reset_count(msg: &Reply) -> i32 {
-    let result :String = msg.result.clone().unwrap().events.iter().filter(|event| event.ty == "wasm" && event.attributes.len() == 3 && event.attributes[1].value == "reset").map(|p| p.attributes[2].value.clone()).collect();
-    // println!("get_reset_count {:?}", &result);
-    result.parse().unwrap()
+
+// fn split_result(text: String) -> (String, String) {
+//     let re = Regex::new(r"(\d*)").unwrap();
+//     let mut found = "";
+//     match re.captures(&text){
+//         Some(caps) => found = caps.get(0).unwrap().as_str(),
+//         None => println!("Denomparsingerror") //Err(ContractError::DenomParsingError{val: text})
+//     }
+//     let remaining = &String::from(text.clone())[found.len()..];
+//     (found.to_string(), remaining.to_string())
+// }
+
+fn split_result_no_regex(coin_str: String) -> (String, String) {
+    let position = coin_str.find(|c: char| !c.is_ascii_digit()).expect("did not find a split position");
+    let (amount, denom) = coin_str.split_at(position);
+    (amount.to_string(), denom.to_string())
 }

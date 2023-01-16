@@ -91,9 +91,9 @@ mod tests {
         app.execute(Addr::unchecked(USER), cosmos_msg).unwrap();
     }
 
-    fn get_tokens(app: &App, manager_contract: &ManagerContract, sender: String) -> GetTokensResponse {
+    fn get_tokens(app: &App, manager_contract: &ManagerContract, sender: String, etf_type: String ) -> GetTokensResponse {
         app.wrap()
-            .query_wasm_smart(manager_contract.addr(), &QueryMsg::GetTokens { sender: sender })
+            .query_wasm_smart(manager_contract.addr(), &QueryMsg::GetTokens { sender: sender, etf_type: etf_type })
             .unwrap()
     }
 
@@ -109,7 +109,7 @@ mod tests {
         let manager_contract = manager_instantiate(&mut app, manager_id);
 
         instantiate_new(&mut app, &manager_contract, counter_id);
-        let res = get_tokens(&app, &manager_contract, "blabla".to_string());
+        let res = get_tokens(&app, &manager_contract, "blabla".to_string(), "first".to_string());
 
         // assert_eq!(res.contracts.len(), 1);
         // assert_eq!(res.contracts[0].1.address, "contract1");
@@ -123,7 +123,7 @@ mod tests {
         instantiate_new(&mut app, &manager_contract, counter_id);
         instantiate_new(&mut app, &manager_contract, counter_id);
 
-        let res = get_tokens(&app, &manager_contract, "blabla".to_string());
+        let res = get_tokens(&app, &manager_contract, "blabla".to_string(), "first".to_string());
 
         // assert_eq!(res.contracts.len(), 2);
         // assert_eq!(res.contracts[0].1.address, "contract1");

@@ -16,12 +16,12 @@ const manager_wasm = fs.readFileSync("../artifacts/osmo_swap_manager.wasm");
 const mnemonic =
 "steak indicate rice motor change pond clarify sign fade call umbrella fork";
 
-const swap_code_id = 5265; // 5102;
-const manager_code_id = 5266;
+const swap_code_id = 5274; // 5102;
+const manager_code_id = 5273;
 
-const swap_addr = "osmo1pyrens6fn4q2n03ckhuwxduvawgm4x2cfzq2m7yjpefl4k5ae6zqfn7ths";
+const swap_addr = "osmo1n73hn8m5uda87z5s7pc6fa0l4fdnfrtdwtxcl5vd82e67mydsx4s3cy46n";
 // #"osmo1fjwcwk70ztzz48fahev0qxhlnpwmsy60jdm83v2vnc7kyhh9ph7srytxfq";
-const manager_addr = "osmo18m64ugsky9j2lcvl9e6al86y5hksll5aemwstek0v5d2d6shurjqcc2gx6";
+const manager_addr = "osmo1u49l7ctrd50nephamk6mynxcmdgvamydy2j2pmwvfc3nn2fnl9vqky3psx";
 
 
 
@@ -70,7 +70,7 @@ describe("swap Fullstack Test", () => {
 
     xit("Send Testnet Tokens", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-        let receiver = "osmo1pyrens6fn4q2n03ckhuwxduvawgm4x2cfzq2m7yjpefl4k5ae6zqfn7ths";
+        let receiver = swap_addr;
         let res = await client.sendTokens(await getAddress(mnemonic), receiver, [{denom:"uosmo", amount:"5000"}], "auto");
         console.log(res);
     }).timeout(100000);
