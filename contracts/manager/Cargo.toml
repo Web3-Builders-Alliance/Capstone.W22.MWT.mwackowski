@@ -35,13 +35,6 @@ backtraces = ["cosmwasm-std/backtraces"]
 # use library feature to disable all instantiate/execute/query exports
 library = []
 
-[package.metadata.scripts]
-optimize = """docker run --rm -v "$(pwd)":/code \
-  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
-  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/rust-optimizer:0.12.10
-"""
-
 [dependencies]
 cosmwasm-std = { workspace = true}
 cosmwasm-storage = { workspace = true } 
@@ -52,6 +45,7 @@ schemars = { workspace = true } #3"0.8.8"
 serde = { workspace = true } #{ version = "1.0.137", default-features = false, features = ["derive"] }
 thiserror = { workspace = true } #{ version = "1.0.31" }
 regex = { workspace = true}
+prost = {workspace = true }
 osmo-swap = { path = "../swap", version = "0.1.0", features = ["library"]}
 osmosis-std = {path = "./../../packages/osmosis-std"}
 

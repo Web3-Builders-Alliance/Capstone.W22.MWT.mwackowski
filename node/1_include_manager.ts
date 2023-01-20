@@ -16,12 +16,12 @@ const manager_wasm = fs.readFileSync("../artifacts/osmo_swap_manager.wasm");
 const mnemonic =
 "steak indicate rice motor change pond clarify sign fade call umbrella fork";
 
-const swap_code_id = 5274; // 5102;
-const manager_code_id = 5273;
+const swap_code_id = 5322; // 5102;
+const manager_code_id = 5375;
 
-const swap_addr = "osmo1n73hn8m5uda87z5s7pc6fa0l4fdnfrtdwtxcl5vd82e67mydsx4s3cy46n";
+const swap_addr = "osmo1qsj4c4tw6pl2g77ud5wr4zp06m370xm3c0ms2hlf900d2u0kfj6szh3adk";
 // #"osmo1fjwcwk70ztzz48fahev0qxhlnpwmsy60jdm83v2vnc7kyhh9ph7srytxfq";
-const manager_addr = "osmo1u49l7ctrd50nephamk6mynxcmdgvamydy2j2pmwvfc3nn2fnl9vqky3psx";
+const manager_addr = "osmo1mp40jjskuyrdmfcpunqylthhyjvkcdppw6pq8rtpgx9x2csq3aps2q68hy";
 
 
 
@@ -71,7 +71,7 @@ describe("swap Fullstack Test", () => {
     xit("Send Testnet Tokens", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
         let receiver = swap_addr;
-        let res = await client.sendTokens(await getAddress(mnemonic), receiver, [{denom:"uosmo", amount:"5000"}], "auto");
+        let res = await client.sendTokens(await getAddress(mnemonic), receiver, [{denom:"uosmo", amount:"3000"}], "auto");
         console.log(res);
     }).timeout(100000);
 
@@ -109,17 +109,6 @@ describe("swap Fullstack Test", () => {
         };
     }).timeout(60000);
 
-    xit("3. Instantiate swap code on testnet", async () => {
-        let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-            let res = await client.instantiate(await getAddress(mnemonic), swap_code_id, 
-            {debug: true}, "messages", "auto");
-
-        for (let i = 0; i<res.logs[0].events.length; i++) {
-            console.log("------------EVENTS[%s]-----------------",i);
-            console.log(res.logs[0].events[i]);          
-        };
-    }).timeout(60000);
-
     xit("Instantiate new swap contract", async() => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
         let res = await client.execute(await getAddress(mnemonic), 
@@ -138,17 +127,21 @@ describe("swap Fullstack Test", () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
         let res = await client.execute(await getAddress(mnemonic), 
         manager_addr, {  swap_tokens: { 
-            contract: swap_addr,
-            initial_balance: {amount: "5000", denom: "uosmo"}, 
+            // contract: swap_addr,
+            initial_balance: {amount: "3000", denom: "uosmo"}, 
             etf_swap_routes: 
             {
                 name: "first_swap",
                 routes: 
                 [
-                    {pool_id: "1", token_out_denom: "some_denom_out"}
+                    // {pool_id: 1, token_out_denom: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"},
+                    {pool_id: 12, token_out_denom: "ibc/A0CC0CF735BFB30E730C70019D4218A1244FF383503FF7579C9201AB93CA9293"},
+                    {pool_id: 10, token_out_denom: "ibc/E6931F78057F7CC5DA0FD6CEF82FF39373A6E0452BF1FD76910B93292CF356C1"}, 
+                    
+                    {pool_id: 6, token_out_denom: "ibc/9712DBB13B9631EDFA9BF61B55F1B2D290B2ADB67E3A4EB3A875F3B6081B3B84"}
                 ],
                 ratios: 
-                [1]
+                ["30", "40", "30"]
             }
         }},
         "auto", "", 

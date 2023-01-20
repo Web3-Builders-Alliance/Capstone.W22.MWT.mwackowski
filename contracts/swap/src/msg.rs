@@ -1,6 +1,6 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
-use osmosis_std::{shim::Timestamp, types::cosmos::base::v1beta1::Coin};
+use osmosis_std::{shim::Timestamp, types::{cosmos::base::v1beta1::Coin, osmosis::gamm::v1beta1::Pool}};
 pub use osmosis_std::types::osmosis::epochs::v1beta1::QueryEpochsInfoResponse;
 use osmosis_std::types::osmosis::gamm::v1beta1::SwapAmountInRoute;
 pub use osmosis_std::types::osmosis::gamm::v1beta1::{
@@ -73,4 +73,9 @@ pub enum QueryMsg {
 #[cw_serde]
 pub struct QueryMapResponse {
     pub value: String,
+}
+
+#[cw_serde]
+pub struct OtherQueryPoolResponse{
+    pub pool: Pool
 }

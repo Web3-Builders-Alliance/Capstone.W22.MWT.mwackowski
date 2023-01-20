@@ -2,12 +2,10 @@ use cosmwasm_std::Coin;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cw_storage_plus::{Map};
+use cw_storage_plus::{Map, Item};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct State {
-    pub address: String,
-}
+use crate::msg::EtfSwapRoutes;
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Ledger {
@@ -23,14 +21,15 @@ pub struct Ledger {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Cache {
     pub sender: String,
-    pub etf_name: String
+    pub etf_swap_routes: EtfSwapRoutes
 }
 
-pub const CONTRACTS: Map<(&str, &str), State> = Map::new("contracts");
+pub const SWAP_CONTRACT: Map<&str, String> = Map::new("swap_contract");
 
 //sender, type
 pub const LEDGER: Map<(&str, &str), Vec<Coin>> = Map::new("ledger");
 //sender, type
-pub const DEPOSIT: Map<(&str, &str), Coin> = Map::new("usdcbalance");
+pub const INITIAL_DEPOSIT: Map<(&str, &str), Coin> = Map::new("usdcbalance");
 
 pub const ETF_CACHE: Map<u64, Cache> = Map::new("cache");
+pub const INITIAL_DEPOSIT_CACHE: Item<Coin> = Item::new("initial_deposit_cache");

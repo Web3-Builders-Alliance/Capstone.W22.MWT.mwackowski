@@ -91,34 +91,21 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
 
 
     let cache = ETF_CACHE.load(deps.storage, 0u64).unwrap();
-    // ETF_CACHE.remove(deps.storage, 0u64);
+    ETF_CACHE.remove(deps.storage, 0u64);
 
     // let depo_key = (cache.sender.as_str(), cache.etf_swap_routes.name.as_str());
     // let deposit = INITIAL_DEPOSIT.load(deps.storage, depo_key)?;
     let swap_addr = SWAP_CONTRACT.load(deps.storage, &MAP_KEY).unwrap();
     let initial_deposit =  INITIAL_DEPOSIT_CACHE.load(deps.storage)?;
-    let (initial_deposit_token_out_denom, _initial_pool_id) = get_initial_route_params(initial_deposit.to_owned().denom).unwrap();
+    let (deposit_token_out_denom, _initial_pool_id) = get_initial_route_params(initial_deposit.to_owned().denom).unwrap();
 
-    // validate length of provided routes and ratios vectors
+
     let etf_swap_routes = cache.etf_swap_routes;
-    if &etf_swap_routes.ratios.len() != &etf_swap_routes.routes.len() {
-        panic!("Ratios and routes params should have the same length")
-    }
 
-    { // validate ratios sum
-        let mut ratios_sum = Uint128::zero();
-        for ratio in etf_swap_routes.clone().ratios.into_iter() {
-            ratios_sum = ratios_sum.checked_add(ratio).unwrap();
-            }
-        if ratios_sum != Uint128::from(100u128) {
-            panic!("Sum of ratios needs to be equal to 100")
-        }
-    }
-    
     
     for route in etf_swap_routes.clone().routes.into_iter() {
         // validate if routes are passed properly before moving into execution
-        let res: QueryPoolResponse = deps.querier.query_wasm_smart(swap_addr.to_owned(),     
+        let res: QueryPoolResponse = deps.querier.query_wasm_smart(swap_addr.to_string(),     
             &osmo_swap::msg::QueryMsg::QueryPool{ pool_id: route.pool_id }).unwrap();
 
         let pool: Pool = res.pool
@@ -137,24 +124,19 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
             //Err(cosmwasm_std::StdError::not_found(deposit.denom.clone()) );
         }
     }
+    
 
-    let mut submessages: std::vec::Vec<SubMsg<Empty>> = vec![];
-    for (_i, (route, ratio)) in etf_swap_routes.clone().routes.into_iter().zip(etf_swap_routes.ratios.into_iter()).enumerate() {
+    for (_i, (route, _ratio)) in etf_swap_routes.clone().routes.into_iter().zip(etf_swap_routes.ratios.into_iter()).enumerate() {
 
         // no need to swap for deposit denoms or denoms that have been received through initial swap
-        if route.token_out_denom == initial_deposit_token_out_denom.to_owned() { // || route.token_out_denom == initial_deposit.denom {
+        if route.token_out_denom == deposit_token_out_denom || route.token_out_denom == initial_deposit.denom {
             continue 
         } else {
-            // u128 division floors number automatically which is exactly what we need
-            let token_in_amount = (ratio * Uint128::from(initial_amount_swapped.parse::<u128>().unwrap())).u128() / 100;
-            let execute_message = create_msg_execute_swap(
-                swap_addr.to_string(), route.pool_id, route.token_out_denom.to_owned(), 
-                coin(token_in_amount, initial_deposit_token_out_denom.to_owned())
-            );
-            submessages.push(SubMsg::reply_on_success(execute_message, EXECUTE_SWAPS_REPLY_ID));
+            
             
         }
     }
+    
 
     // if LEDGER.has(deps.storage, depo_key.clone()){
     //     let curr_ledger = LEDGER.load(deps.storage, depo_key).unwrap();  
@@ -183,27 +165,13 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
     return Ok(Response::default()
         .add_attribute("swap_received_amount", initial_amount_swapped)
         .add_attribute("swap_received_denom", initial_denom_swapped)
-        .add_submessages(submessages)
         // .add_attribute("deposit_denom", deposit.denom)
         // .add_attribute("total_deposit_amount", deposit.amount)
     );
  }
 
- fn handle_swaps_reply(_deps: DepsMut, msg: Reply) -> StdResult<Response> {
-
-        // Filter the result so that it returns single event value
-        let result: String = msg.result.clone()
-            .unwrap()
-            .events.iter()
-            .filter(|event| event.ty == "token_swapped" && event.attributes[4].key == "tokens_out")
-            .map(|p| p.attributes[4].value.clone())
-            .collect();
-    let (initial_amount_swapped, initial_denom_swapped) = split_result_no_regex(result.to_owned());
-
-    Ok(Response::default()
-        .add_attribute("swap_received_amount", initial_amount_swapped)
-        .add_attribute("swap_received_denom", initial_denom_swapped))
-
+ fn handle_swaps_reply(_deps: DepsMut, _msg: Reply) -> StdResult<Response> {
+    unimplemented!()
  }
     
     // match CONTRACTS.load(deps.storage, (&MAP_KEY, &contract_address)) {
@@ -287,13 +255,14 @@ pub fn try_execute_swap_exact_amount_in(
 
     let (deposit_token_out_denom, pool_id) = get_initial_route_params(deposit.denom.to_string())?;
     
-    if !vec!["uosmo", "usdc"].iter().any(|&i| i == deposit.denom) {
-        return Err(ContractError::InvalidDepositDenom {val: deposit.denom.clone()});
-    }
+    // if !vec!["uosmo", "usdc"].iter().any(|&i| i == deposit.denom) {
+    //     return Err(ContractError::InvalidDepositDenom {val: deposit.denom.clone()});
+    // }
+
+
 
     // firstly, as most of the pools on Osmosis are based on OSMO, it is better to swap all USDC to 
     // OSMO as one transaction in the first place
-
     let execute_message = create_msg_execute_swap(
         swap_contract_addr.to_string(), pool_id, deposit_token_out_denom.to_owned(), deposit.clone()
     );

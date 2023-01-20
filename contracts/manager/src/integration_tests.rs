@@ -83,7 +83,6 @@ mod tests {
     fn swap(app: &mut App, manager_contract: &ManagerContract, contract_addr: String,
     usdc_balance: Coin, etf_type: EtfSwapRoutes) {
         let msg = ExecuteMsg::SwapTokens { 
-            contract: contract_addr, 
             initial_balance: usdc_balance, 
             etf_swap_routes: etf_type };
 

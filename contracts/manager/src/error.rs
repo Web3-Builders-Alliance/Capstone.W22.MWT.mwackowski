@@ -12,7 +12,7 @@ pub enum ContractError {
     #[error("Not Found: {val:?}")]
     NotFound {val: String},
 
-    #[error("Invalid deposit denom: {val:?}")]
+    #[error("Invalid deposit denom: {val:?}, allowed denoms are: uosmo, usdc")]
     InvalidDepositDenom {val: String},
 
     #[error("Denom parsing error: {val:?}")]

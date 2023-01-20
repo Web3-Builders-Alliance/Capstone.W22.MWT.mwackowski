@@ -1,4 +1,4 @@
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Coin, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,6 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     InstantiateSwap { code_id: u64 }, // should I use it within manager contract or maybe instantiate both indepenedntly?
     SwapTokens { 
-        contract: String,
         initial_balance: Coin,
         etf_swap_routes: EtfSwapRoutes }
 }
@@ -33,12 +32,12 @@ pub struct GetTokensResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct EtfSwapRoutes {
     pub name: String,
-    pub routes: Vec<Route>, // for now there will be only one item, I should consider nesting into another Vec <>
-    pub ratios: Vec<u64>
+    pub routes: Vec<Route>, // Route per each token that etf consists of
+    pub ratios: Vec<Uint128>    // ratio per each token that etf consists of -> consider merging into Vec<(Route, u64)>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Route {
-    pub pool_id: String, 
+    pub pool_id: u64, 
     pub token_out_denom: String
 }

@@ -17,8 +17,10 @@ const mnemonic =
 
 const swap_code_id = 5250; ///5102;
 
-const swap_addr = "osmo1t2da8tmaszhcthvmkuxgm7e3sfjz22ydv299wkmgtdl62w6va9eslnkkpz";
+
+const swap_addr = "osmo1g2w04trhnpgulax5909myn05pkx24z0kzs3pmt8ul49zg6yfx65suf8prr";
 // #"osmo1fjwcwk70ztzz48fahev0qxhlnpwmsy60jdm83v2vnc7kyhh9ph7srytxfq";
+const manager_addr = "osmo1hsa2t9x5wl78j74urna9a05ss2939vqkwt7rp7djeltpwg7f5csq4v5acz";
 
 export interface Timestamp {
     nanos: number;
@@ -112,7 +114,7 @@ describe("swap Fullstack Test", () => {
     //https://rest.cosmos.directory/osmosis/ibc/apps/transfer/v1/denom_traces/E6931F78057F7CC5DA0FD6CEF82FF39373A6E0452BF1FD76910B93292CF356C1
     xit("3. Query pool", async () => {
             let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
-            let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 2}});
+            let res = await client.queryContractSmart(swap_addr, { query_pool : {pool_id: 10}});
 
             console.log(res);
             console.log("------------assets-----------------");
@@ -142,7 +144,8 @@ describe("swap Fullstack Test", () => {
                 pool_id: 1,
                 base_asset: "uosmo",
                 quote_asset: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
-                start_time: "2023-01-03T13:35:58+00:00"
+                // quote_asset: "ibc/E6931F78057F7CC5DA0FD6CEF82FF39373A6E0452BF1FD76910B93292CF356C1",
+                start_time: "2023-01-20T12:35:58+00:00"
                 // start_time: `${new Date(1635209044000).toISOString().slice(0, 23)}`
         }});
         console.log(res);
@@ -151,14 +154,20 @@ describe("swap Fullstack Test", () => {
     xit("7. swap exact amount in", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
 
-        let out_denom = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2";
+        let out_denom = "ibc/E6931F78057F7CC5DA0FD6CEF82FF39373A6E0452BF1FD76910B93292CF356C1";
         let res = await client.execute(await getAddress(mnemonic), 
         swap_addr, { execute_swap_exact_amount_in: 
-            {
-                routes: [{pool_id: "1", 
+            // {
+            //     routes: [{pool_id: "1", 
+            //             token_out_denom: out_denom}],
+            //     token_in: {amount: "5000", denom: "uosmo"}, 
+            //     token_out_min_amount: "1"
+            // }},
+                       {
+                routes: [{pool_id: "10", 
                         token_out_denom: out_denom}],
-                token_in: {amount: "10000", denom: "uosmo"}, 
-                token_out_min_amount: "2550"
+                token_in: {amount: "380", denom: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"}, 
+                token_out_min_amount: "1"
             }},
         "auto", "", 
         [{amount: "1000", denom: "uosmo"}]);
