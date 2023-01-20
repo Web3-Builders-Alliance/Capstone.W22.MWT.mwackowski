@@ -106,10 +106,14 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
     }
 
     { // validate ratios sum
-        let mut ratios_sum = Uint128::zero();
-        for ratio in etf_swap_routes.clone().ratios.into_iter() {
-            ratios_sum = ratios_sum.checked_add(ratio).unwrap();
-            }
+        // let mut ratios_sum = Uint128::zero();
+        // for ratio in etf_swap_routes.clone().ratios.into_iter() {
+        //     ratios_sum = ratios_sum.checked_add(ratio).unwrap();
+        //     }
+        // if ratios_sum != Uint128::from(100u128) {
+        //     panic!("Sum of ratios needs to be equal to 100")
+        // }
+        let ratios_sum: Uint128 = etf_swap_routes.clone().ratios.iter().sum();
         if ratios_sum != Uint128::from(100u128) {
             panic!("Sum of ratios needs to be equal to 100")
         }
