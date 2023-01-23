@@ -50,3 +50,4 @@ osmosis-std = {path = "./../../packages/osmosis-std"}
 
 [dev-dependencies]
 cw-multi-test = "0.16.2"
+osmosis-testing = {path = "./../../packages/osmosis-testing"}

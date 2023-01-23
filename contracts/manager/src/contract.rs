@@ -142,6 +142,9 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
         }
     }
 
+
+    // let depo_key = (cache.sender.as_str(), cache.etf_swap_routes.name.as_str());
+    // let deposit = INITIAL_DEPOSIT.load(deps.storage, depo_key)?;
     let mut submessages: std::vec::Vec<SubMsg<Empty>> = vec![];
     for (_i, (route, ratio)) in etf_swap_routes.clone().routes.into_iter().zip(etf_swap_routes.ratios.into_iter()).enumerate() {
 
@@ -156,9 +159,9 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
                 coin(token_in_amount, initial_deposit_token_out_denom.to_owned())
             );
             submessages.push(SubMsg::reply_on_success(execute_message, EXECUTE_SWAPS_REPLY_ID));
-            
         }
     }
+
 
     // if LEDGER.has(deps.storage, depo_key.clone()){
     //     let curr_ledger = LEDGER.load(deps.storage, depo_key).unwrap();  
@@ -193,20 +196,39 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
     );
  }
 
- fn handle_swaps_reply(_deps: DepsMut, msg: Reply) -> StdResult<Response> {
+ fn handle_swaps_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
 
         // Filter the result so that it returns single event value
-        let result: String = msg.result.clone()
-            .unwrap()
-            .events.iter()
-            .filter(|event| event.ty == "token_swapped" && event.attributes[4].key == "tokens_out")
-            .map(|p| p.attributes[4].value.clone())
-            .collect();
-    let (initial_amount_swapped, initial_denom_swapped) = split_result_no_regex(result.to_owned());
+    let result: String = msg.result.clone()
+        .unwrap()
+        .events.iter()
+        .filter(|event| event.ty == "token_swapped" && event.attributes[4].key == "tokens_out")
+        .map(|p| p.attributes[4].value.clone())
+        .collect();
+    let (amount_swapped, denom_swapped) = split_result_no_regex(result.to_owned());
+
+    let cache = ETF_CACHE.load(deps.storage, 0u64).unwrap();
+    let depo_key = (cache.sender.as_str(), cache.etf_swap_routes.name.as_str());
+
+    let mut new_ledger: Vec<Coin> = vec![];
+    if LEDGER.has(deps.storage, depo_key.clone()){
+        let curr_ledger = LEDGER.load(deps.storage, depo_key).unwrap();  
+        for c in curr_ledger.into_iter() {
+            if &c.denom == &denom_swapped {
+                let new_val = Uint128::from(amount_swapped.parse::<u128>().unwrap());
+                new_ledger.push(
+                    coin(c.amount.checked_add(new_val)?.u128(), c.denom)
+                )
+            } else {
+                new_ledger.push(c);
+            }
+        }      
+    }
+    LEDGER.save(deps.storage, depo_key, &new_ledger)?;
 
     Ok(Response::default()
-        .add_attribute("swap_received_amount", initial_amount_swapped)
-        .add_attribute("swap_received_denom", initial_denom_swapped))
+        .add_attribute("swap_received_amount", amount_swapped)
+        .add_attribute("swap_received_denom", denom_swapped))
 
  }
     

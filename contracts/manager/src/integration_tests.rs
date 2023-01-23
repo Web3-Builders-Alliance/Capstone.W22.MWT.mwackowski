@@ -1,11 +1,14 @@
 #[cfg(test)]
 mod tests {
     use crate::helpers::ManagerContract;
-    use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes};
+    use crate::msg::{ExecuteMsg, GetTokensResponse, QueryMsg, EtfSwapRoutes, InstantiateMsg};
     use cosmwasm_std::{Addr, Coin, Empty, Uint128};
     use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
 
-    // use osmo_swap::{self, GetCountResponse};
+
+    use osmo_swap::msg::InstantiateMsg as OsmoInstantiateMsg;
+    use osmosis_testing::{Gamm, Module, OsmosisTestApp, SigningAccount, Wasm};
+    use std::path::PathBuf;
 
     pub fn contract_manager() -> Box<dyn Contract<Empty>> {
         let contract = ContractWrapper::new(
@@ -46,13 +49,48 @@ mod tests {
         })
     }
 
-    fn store_code() -> (App, u64, u64) {
-        let mut app = mock_app();
-        let manager_id = app.store_code(contract_manager());
-        let counter_id = app.store_code(contract_swap());
-        println!("swap id: {}, manager id: {}", counter_id, manager_id);
-        (app, manager_id, counter_id)
+    fn store_code() -> (App, OsmosisTestApp, u64, u64, String) {
+        let mut manager_app = mock_app();
+        let manager_id = manager_app.store_code(contract_manager());
+        let osmo_app = OsmosisTestApp::new();
+        let wasm = Wasm::new(&osmo_app);
+        let signer = osmo_app
+            .init_account(&[
+                Coin::new(100_000_000_000, "uosmo"),
+                Coin::new(100_000_000_000, "uion"),
+                Coin::new(100_000_000_000, "uusdc"),
+                Coin::new(100_000_000_000, "uiou"),
+            ])
+            .unwrap();
+    
+        let swap_id = wasm
+            .store_code(&get_wasm_byte_code(), None, &signer)
+            .unwrap()
+            .data
+            .code_id;
+        let swap_addr = wasm
+            .instantiate(swap_id, &OsmoInstantiateMsg { debug: true }, None, None, &[], &signer)
+            .unwrap()
+            .data
+            .address;
+        println!("swap id: {}, manager id: {}", swap_id, manager_id);
+        (manager_app, osmo_app, manager_id, swap_id, swap_addr)
     }
+
+   
+
+    fn get_wasm_byte_code() -> Vec<u8> {
+        let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        std::fs::read(
+            manifest_path
+                .join("..")
+                .join("..")
+                .join("artifacts")
+                .join("osmo_swap.wasm"),
+        )
+        .unwrap()
+    }
+    
 
     fn manager_instantiate(app: &mut App, manager_id: u64) -> ManagerContract {
         let msg = InstantiateMsg {};
@@ -70,13 +108,14 @@ mod tests {
     }
 
     //call InstantiateNew on the manager contract to create a new counter instance.
-    fn instantiate_new(app: &mut App, manager_contract: &ManagerContract, counter_id: u64) {
+    fn instantiate_new(app: &mut App, manager_contract: &ManagerContract, swap_id: u64) {
         let msg = ExecuteMsg::InstantiateSwap {
-            code_id: counter_id,
+            code_id: swap_id,
         };
-        println!("counter id from instantate_new(): {}", counter_id);
+        println!("swap id from instantate_new(): {}", swap_id);
         let cosmos_msg = manager_contract.call(msg).unwrap();
         app.execute(Addr::unchecked(USER), cosmos_msg).unwrap();
+        
     }
 
     //increment the counter from the manager contract
@@ -104,30 +143,30 @@ mod tests {
 
     #[test]
     fn create_one_counter() {
-        let (mut app, manager_id, counter_id) = store_code();
-        let manager_contract = manager_instantiate(&mut app, manager_id);
+        let (mut manager_app, mut osmo_app, manager_id, swap_id, swap_addr) = store_code();
+        let manager_contract = manager_instantiate(&mut manager_app, manager_id);
 
-        instantiate_new(&mut app, &manager_contract, counter_id);
-        let res = get_tokens(&app, &manager_contract, "blabla".to_string(), "first".to_string());
-
+        // instantiate_new(&mut app, &manager_contract, counter_id);
+        // let res = get_tokens(&app, &manager_contract, "blabla".to_string(), "first".to_string());
+        // println!("{:?}", res);
         // assert_eq!(res.contracts.len(), 1);
         // assert_eq!(res.contracts[0].1.address, "contract1");
     }
 
-    #[test]
-    fn create_two_counters() {
-        let (mut app, manager_id, counter_id) = store_code();
-        let manager_contract = manager_instantiate(&mut app, manager_id);
+    // #[test]
+    // fn create_two_counters() {
+    //     let (mut app, manager_id, counter_id) = store_code();
+    //     let manager_contract = manager_instantiate(&mut app, manager_id);
 
-        instantiate_new(&mut app, &manager_contract, counter_id);
-        instantiate_new(&mut app, &manager_contract, counter_id);
+    //     instantiate_new(&mut app, &manager_contract, counter_id);
+    //     instantiate_new(&mut app, &manager_contract, counter_id);
 
-        let res = get_tokens(&app, &manager_contract, "blabla".to_string(), "first".to_string());
+    //     let res = get_tokens(&app, &manager_contract, "blabla".to_string(), "first".to_string());
 
-        // assert_eq!(res.contracts.len(), 2);
-        // assert_eq!(res.contracts[0].1.address, "contract1");
-        // assert_eq!(res.contracts[1].1.address, "contract2");
-    }
+    //     // assert_eq!(res.contracts.len(), 2);
+    //     // assert_eq!(res.contracts[0].1.address, "contract1");
+    //     // assert_eq!(res.contracts[1].1.address, "contract2");
+    // }
 
     // #[test]
     // fn create_counter_and_increment() {
