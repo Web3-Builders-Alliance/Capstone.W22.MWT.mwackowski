@@ -1,0 +1,551 @@
+{
+  "contract_name": "osmo-swap-manager",
+  "contract_version": "0.1.0",
+  "idl_version": "1.0.0",
+  "instantiate": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "InstantiateMsg",
+    "description": "Message type for `instantiate` entry_point",
+    "type": "object",
+    "required": [
+      "debug"
+    ],
+    "properties": {
+      "debug": {
+        "type": "boolean"
+      }
+    },
+    "additionalProperties": false
+  },
+  "execute": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ExecuteMsg",
+    "description": "Message type for `execute` entry_point",
+    "oneOf": [
+      {
+        "type": "object",
+        "required": [
+          "set_map"
+        ],
+        "properties": {
+          "set_map": {
+            "type": "object",
+            "required": [
+              "key",
+              "value"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "execute_swap_exact_amount_in"
+        ],
+        "properties": {
+          "execute_swap_exact_amount_in": {
+            "type": "object",
+            "required": [
+              "routes",
+              "token_out_min_amount"
+            ],
+            "properties": {
+              "routes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/SwapAmountInRoute"
+                }
+              },
+              "token_in": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Coin"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "token_out_min_amount": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    ],
+    "definitions": {
+      "Coin": {
+        "description": "Coin defines a token with a denomination and an amount.\n\nNOTE: The amount field is an Int which implements the custom method signatures required by gogoproto.",
+        "type": "object",
+        "required": [
+          "amount",
+          "denom"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "denom": {
+            "type": "string"
+          }
+        }
+      },
+      "SwapAmountInRoute": {
+        "description": "===================== MsgSwapExactAmountIn",
+        "type": "object",
+        "required": [
+          "pool_id",
+          "token_out_denom"
+        ],
+        "properties": {
+          "pool_id": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "token_out_denom": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "query": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "QueryMsg",
+    "description": "Message type for `query` entry_point",
+    "oneOf": [
+      {
+        "type": "object",
+        "required": [
+          "query_num_pools"
+        ],
+        "properties": {
+          "query_num_pools": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "query_epochs_info"
+        ],
+        "properties": {
+          "query_epochs_info": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "query_pool"
+        ],
+        "properties": {
+          "query_pool": {
+            "type": "object",
+            "required": [
+              "pool_id"
+            ],
+            "properties": {
+              "pool_id": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "query_pool_params"
+        ],
+        "properties": {
+          "query_pool_params": {
+            "type": "object",
+            "required": [
+              "pool_id"
+            ],
+            "properties": {
+              "pool_id": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "query_arithmetic_twap"
+        ],
+        "properties": {
+          "query_arithmetic_twap": {
+            "type": "object",
+            "required": [
+              "base_asset",
+              "pool_id",
+              "quote_asset"
+            ],
+            "properties": {
+              "base_asset": {
+                "type": "string"
+              },
+              "end_time": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pool_id": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "quote_asset": {
+                "type": "string"
+              },
+              "start_time": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/Timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "query_map"
+        ],
+        "properties": {
+          "query_map": {
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    ],
+    "definitions": {
+      "Timestamp": {
+        "type": "object",
+        "required": [
+          "nanos",
+          "seconds"
+        ],
+        "properties": {
+          "nanos": {
+            "description": "Non-negative fractions of a second at nanosecond resolution. Negative second values with fractions must still have non-negative nanos values that count forward in time. Must be from 0 to 999,999,999 inclusive.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "seconds": {
+            "description": "Represents seconds of UTC time since Unix epoch 1970-01-01T00:00:00Z. Must be from 0001-01-01T00:00:00Z to 9999-12-31T23:59:59Z inclusive.",
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    }
+  },
+  "migrate": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "MigrateMsg",
+    "description": "Message type for `migrate` entry_point",
+    "type": "string",
+    "enum": []
+  },
+  "sudo": null,
+  "responses": {
+    "query_arithmetic_twap": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ArithmeticTwapResponse",
+      "type": "object",
+      "required": [
+        "arithmetic_twap"
+      ],
+      "properties": {
+        "arithmetic_twap": {
+          "type": "string"
+        }
+      }
+    },
+    "query_epochs_info": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QueryEpochsInfoResponse",
+      "type": "object",
+      "required": [
+        "epochs"
+      ],
+      "properties": {
+        "epochs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EpochInfo"
+          }
+        }
+      },
+      "definitions": {
+        "Duration": {
+          "type": "object",
+          "required": [
+            "nanos",
+            "seconds"
+          ],
+          "properties": {
+            "nanos": {
+              "description": "Signed fractions of a second at nanosecond resolution of the span of time. Durations less than one second are represented with a 0 `seconds` field and a positive or negative `nanos` field. For durations of one second or more, a non-zero value for the `nanos` field must be of the same sign as the `seconds` field. Must be from -999,999,999 to +999,999,999 inclusive.",
+              "type": "integer",
+              "format": "int32"
+            },
+            "seconds": {
+              "description": "Signed seconds of the span of time. Must be from -315,576,000,000 to +315,576,000,000 inclusive. Note: these bounds are computed from: 60 sec/min * 60 min/hr * 24 hr/day * 365.25 days/year * 10000 years",
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        },
+        "EpochInfo": {
+          "description": "EpochInfo is a struct that describes the data going into a timer defined by the x/epochs module.",
+          "type": "object",
+          "required": [
+            "current_epoch",
+            "current_epoch_start_height",
+            "epoch_counting_started",
+            "identifier"
+          ],
+          "properties": {
+            "current_epoch": {
+              "description": "current_epoch is the current epoch number, or in other words, how many times has the timer 'ticked'. The first tick (current_epoch=1) is defined as the first block whose blocktime is greater than the EpochInfo start_time.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "current_epoch_start_height": {
+              "description": "current_epoch_start_height is the block height at which the current epoch started. (The block height at which the timer last ticked)",
+              "type": "integer",
+              "format": "int64"
+            },
+            "current_epoch_start_time": {
+              "description": "current_epoch_start_time describes the start time of the current timer interval. The interval is (current_epoch_start_time, current_epoch_start_time + duration] When the timer ticks, this is set to current_epoch_start_time = last_epoch_start_time + duration only one timer tick for a given identifier can occur per block.\n\nNOTE! The current_epoch_start_time may diverge significantly from the wall-clock time the epoch began at. Wall-clock time of epoch start may be >> current_epoch_start_time. Suppose current_epoch_start_time = 10, duration = 5. Suppose the chain goes offline at t=14, and comes back online at t=30, and produces blocks at every successive time. (t=31, 32, etc.) * The t=30 block will start the epoch for (10, 15] * The t=31 block will start the epoch for (15, 20] * The t=32 block will start the epoch for (20, 25] * The t=33 block will start the epoch for (25, 30] * The t=34 block will start the epoch for (30, 35] * The **t=36** block will start the epoch for (35, 40]",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Timestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "duration": {
+              "description": "duration is the time in between epoch ticks. In order for intended behavior to be met, duration should be greater than the chains expected block time. Duration must be non-zero.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Duration"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "epoch_counting_started": {
+              "description": "epoch_counting_started is a boolean, that indicates whether this epoch timer has began yet.",
+              "type": "boolean"
+            },
+            "identifier": {
+              "description": "identifier is a unique reference to this particular timer.",
+              "type": "string"
+            },
+            "start_time": {
+              "description": "start_time is the time at which the timer first ever ticks. If start_time is in the future, the epoch will not begin until the start time.",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Timestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "Timestamp": {
+          "type": "object",
+          "required": [
+            "nanos",
+            "seconds"
+          ],
+          "properties": {
+            "nanos": {
+              "description": "Non-negative fractions of a second at nanosecond resolution. Negative second values with fractions must still have non-negative nanos values that count forward in time. Must be from 0 to 999,999,999 inclusive.",
+              "type": "integer",
+              "format": "int32"
+            },
+            "seconds": {
+              "description": "Represents seconds of UTC time since Unix epoch 1970-01-01T00:00:00Z. Must be from 0001-01-01T00:00:00Z to 9999-12-31T23:59:59Z inclusive.",
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      }
+    },
+    "query_map": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QueryMapResponse",
+      "type": "object",
+      "required": [
+        "value"
+      ],
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "query_num_pools": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QueryNumPoolsResponse",
+      "type": "object",
+      "required": [
+        "num_pools"
+      ],
+      "properties": {
+        "num_pools": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    "query_pool": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QueryPoolResponse",
+      "type": "object",
+      "properties": {
+        "pool": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Any"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "definitions": {
+        "Any": {
+          "type": "object",
+          "required": [
+            "type_url",
+            "value"
+          ],
+          "properties": {
+            "type_url": {
+              "description": "A URL/resource name that uniquely identifies the type of the serialized protocol buffer message. This string must contain at least one \"/\" character. The last segment of the URL's path must represent the fully qualified name of the type (as in `path/google.protobuf.Duration`). The name should be in a canonical form (e.g., leading \".\" is not accepted).\n\nIn practice, teams usually precompile into the binary all types that they expect it to use in the context of Any. However, for URLs which use the scheme `http`, `https`, or no scheme, one can optionally set up a type server that maps type URLs to message definitions as follows:\n\n* If no scheme is provided, `https` is assumed. * An HTTP GET on the URL must yield a \\[google.protobuf.Type][\\] value in binary format, or produce an error. * Applications are allowed to cache lookup results based on the URL, or have them precompiled into a binary to avoid any lookup. Therefore, binary compatibility needs to be preserved on changes to types. (Use versioned type names to manage breaking changes.)\n\nNote: this functionality is not currently available in the official protobuf release, and it is not used for type URLs beginning with type.googleapis.com.\n\nSchemes other than `http`, `https` (or the empty scheme) might be used with implementation specific semantics.",
+              "type": "string"
+            },
+            "value": {
+              "description": "Must be a valid serialized protocol buffer of the above specified type.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            }
+          }
+        }
+      }
+    },
+    "query_pool_params": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "QueryPoolParamsResponse",
+      "type": "object",
+      "properties": {
+        "params": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Any"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "definitions": {
+        "Any": {
+          "type": "object",
+          "required": [
+            "type_url",
+            "value"
+          ],
+          "properties": {
+            "type_url": {
+              "description": "A URL/resource name that uniquely identifies the type of the serialized protocol buffer message. This string must contain at least one \"/\" character. The last segment of the URL's path must represent the fully qualified name of the type (as in `path/google.protobuf.Duration`). The name should be in a canonical form (e.g., leading \".\" is not accepted).\n\nIn practice, teams usually precompile into the binary all types that they expect it to use in the context of Any. However, for URLs which use the scheme `http`, `https`, or no scheme, one can optionally set up a type server that maps type URLs to message definitions as follows:\n\n* If no scheme is provided, `https` is assumed. * An HTTP GET on the URL must yield a \\[google.protobuf.Type][\\] value in binary format, or produce an error. * Applications are allowed to cache lookup results based on the URL, or have them precompiled into a binary to avoid any lookup. Therefore, binary compatibility needs to be preserved on changes to types. (Use versioned type names to manage breaking changes.)\n\nNote: this functionality is not currently available in the official protobuf release, and it is not used for type URLs beginning with type.googleapis.com.\n\nSchemes other than `http`, `https` (or the empty scheme) might be used with implementation specific semantics.",
+              "type": "string"
+            },
+            "value": {
+              "description": "Must be a valid serialized protocol buffer of the above specified type.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

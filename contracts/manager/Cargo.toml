@@ -46,6 +46,7 @@ serde = { workspace = true } #{ version = "1.0.137", default-features = false, f
 thiserror = { workspace = true } #{ version = "1.0.31" }
 regex = { workspace = true}
 prost = {workspace = true }
+cosmwasm-schema = {workspace = true }
 osmo-swap = { path = "../swap", version = "0.1.0", features = ["library"]}
 osmosis-std = {path = "./../../packages/osmosis-std"}
 

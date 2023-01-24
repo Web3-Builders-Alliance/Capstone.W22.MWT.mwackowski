@@ -81,6 +81,7 @@ pub fn setup_pools(app: &OsmosisTestApp, signer: &SigningAccount) -> Vec<u64> {
 
     vec![balancer_pool_id]
 }
+
 pub fn get_wasm_byte_code() -> Vec<u8> {
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     std::fs::read(

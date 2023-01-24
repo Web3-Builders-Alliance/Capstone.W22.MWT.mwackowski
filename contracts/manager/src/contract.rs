@@ -1,10 +1,10 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, WasmMsg, Reply, StdError, Empty, Coin, coin, Uint128, WasmQuery,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, WasmMsg, Reply, StdError, Empty, Coin, coin, Uint128, WasmQuery, BankMsg,
 };
 
-use cw2::set_contract_version;
+use cw2::{set_contract_version, CONTRACT};
 
 // use cw_multi_test::Executor;
 use cw_utils::{parse_reply_instantiate_data};
@@ -30,7 +30,7 @@ const EXECUTE_SWAPS_REPLY_ID:u64 = 3;
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
     _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
@@ -42,15 +42,16 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::InstantiateSwap { code_id } 
-            => instantiate_swap(deps, info, code_id),
+        ExecuteMsg::InstantiateSwap { code_id, debug} 
+            => instantiate_swap(deps, info, code_id, debug),
         ExecuteMsg::SwapTokens { initial_balance, etf_swap_routes} => try_execute_swap_exact_amount_in(
                 deps, 
+                env,
                 info.sender.to_string(), 
                 etf_swap_routes,
                 initial_balance),
@@ -119,9 +120,8 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
         }
     }
     
-    
+    // validate if routes are passed properly before moving into execution
     for route in etf_swap_routes.clone().routes.into_iter() {
-        // validate if routes are passed properly before moving into execution
         let res: QueryPoolResponse = deps.querier.query_wasm_smart(swap_addr.to_owned(),     
             &osmo_swap::msg::QueryMsg::QueryPool{ pool_id: route.pool_id }).unwrap();
 
@@ -270,31 +270,39 @@ pub fn instantiate_swap(
     _deps: DepsMut,
     _info: MessageInfo,
     code_id: u64,
+    debug: bool
 ) -> Result<Response, ContractError> {
     let instantiate_message = WasmMsg::Instantiate {
         admin: None,
         code_id,
-        msg: to_binary(&osmo_swap::msg::InstantiateMsg { debug: true })?,
+        msg: to_binary(&osmo_swap::msg::InstantiateMsg { debug: debug })?,
         funds: vec![],
         label: "osmo_swap".to_string(),
     };
 
     let submessage:SubMsg<Empty> = SubMsg::reply_on_success(instantiate_message, INSTANTIATE_REPLY_ID);
-    Ok(Response::new().add_submessage(submessage))
+    Ok(Response::new().add_submessage(submessage)
+        .add_attribute("method", "instantiate_from_manager"))
 }
 
 
 pub fn try_execute_swap_exact_amount_in(
     deps: DepsMut, 
+    env: Env,
     sender: String,
     etf_swap_routes: EtfSwapRoutes,
     deposit: Coin,
     // tokens_to_swap: Vec<Coin>
 ) 
--> Result<Response, ContractError> {
+-> Result<Response, ContractError> { 
     
     let swap_contract_addr = SWAP_CONTRACT.load(deps.storage, &MAP_KEY)?;
-
+    let bank_msg = BankMsg::Send { to_address: swap_contract_addr.to_owned(), amount: vec![deposit.clone()] };
+    // let execute_message_send = WasmMsg::Execute {
+    //     contract_addr: swap_contract_addr.clone(),
+    //     funds: vec![],
+    //     msg: to_binary(&BankMsg::Send { to_address: swap_contract_addr.to_owned(), amount: vec![deposit.clone()] }).unwrap()
+    // };
     // let's keep track of user's deposited USDC
     let depo_key = (sender.as_str(), etf_swap_routes.name.as_str());
     let new_deposit;
@@ -330,8 +338,10 @@ pub fn try_execute_swap_exact_amount_in(
     // Ok(Response::new().add_submessage(submessage))
     Ok(Response::new()
         // .add_attribute("token_from_pool_asset", token_in)
+        .add_message(bank_msg)
         .add_submessage(submessage))
 }
+
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
@@ -362,9 +372,10 @@ fn create_msg_execute_swap(contract: String,
         token_in.amount.into(), 
         token_in.denom.clone()).into()
         ),
-    // TODO add twap query in order to estimate token_out_min_amount
-            token_out_min_amount: "1".to_string()
+        token_out_min_amount: "1".to_string()
           }).unwrap()
+              // TODO add twap query in order to estimate token_out_min_amount
+
     };
     execute_message   
 }

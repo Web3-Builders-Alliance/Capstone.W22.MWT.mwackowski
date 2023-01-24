@@ -81,7 +81,7 @@ pub fn execute(
         ExecuteMsg::ExecuteSwapExactAmountIn { 
             routes, 
             token_in, 
-            token_out_min_amount
+            token_out_min_amount,
           } => execute_swap_exact_amount_in(env, routes, token_in, token_out_min_amount)
     }
 }
@@ -209,7 +209,6 @@ pub fn execute_swap_exact_amount_in(
 ) -> Result<Response, ContractError> {
     
     let sender = env.contract.address.into();
-
     let msg_create_swap: CosmosMsg = MsgSwapExactAmountIn {
         sender, 
         routes, 
