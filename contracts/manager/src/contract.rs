@@ -11,8 +11,8 @@ use cw_utils::{parse_reply_instantiate_data};
 
 use osmo_swap;
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes};
-use crate::state::{INITIAL_DEPOSIT, INITIAL_DEPOSIT_CACHE, LEDGER, ETF_CACHE, Cache, SWAP_CONTRACT};
+use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes, GetInitialSwapResponse};
+use crate::state::{INITIAL_DEPOSIT, INITIAL_DEPOSIT_CACHE, LEDGER, ETF_CACHE, Cache, SWAP_CONTRACT, INITIAL_SWAP};
 use osmosis_std::types::osmosis::gamm::v1beta1::{SwapAmountInRoute, QueryPoolResponse, Pool, GammQuerier};
 use prost::DecodeError;
 
@@ -146,50 +146,37 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
     // let depo_key = (cache.sender.as_str(), cache.etf_swap_routes.name.as_str());
     // let deposit = INITIAL_DEPOSIT.load(deps.storage, depo_key)?;
     let mut submessages: std::vec::Vec<SubMsg<Empty>> = vec![];
-    for (_i, (route, ratio)) in etf_swap_routes.clone().routes.into_iter().zip(etf_swap_routes.ratios.into_iter()).enumerate() {
+    let mut token_in_amnt_adder = Uint128::zero();
+    let init_amnt = Uint128::from(initial_amount_swapped.parse::<u128>().unwrap());
+    for (i, (route, ratio)) in etf_swap_routes.clone().routes.into_iter().zip(etf_swap_routes.ratios.into_iter()).enumerate() {
 
         // no need to swap for deposit denoms or denoms that have been received through initial swap
         if route.token_out_denom == initial_deposit_token_out_denom.to_owned() { // || route.token_out_denom == initial_deposit.denom {
             continue 
         } else {
-            // u128 division floors number automatically which is exactly what we need
-            let token_in_amount = (ratio * Uint128::from(initial_amount_swapped.parse::<u128>().unwrap())).u128() / 100;
+            let token_in_amount: Uint128;
+            if &i == &(etf_swap_routes.routes.len() - 1) {
+                token_in_amount = init_amnt.checked_sub(token_in_amnt_adder)?;
+            } else {
+                token_in_amount = init_amnt.checked_multiply_ratio(ratio, 100u128).unwrap();
+                token_in_amnt_adder = token_in_amnt_adder.checked_add(token_in_amount)?;
+            }
+            
             let execute_message = create_msg_execute_swap(
                 swap_addr.to_string(), route.pool_id, route.token_out_denom.to_owned(), 
-                coin(token_in_amount, initial_deposit_token_out_denom.to_owned())
+                coin(token_in_amount.into(), initial_deposit_token_out_denom.to_owned())
             );
             submessages.push(SubMsg::reply_on_success(execute_message, EXECUTE_SWAPS_REPLY_ID));
         }
     }
 
-
-    // if LEDGER.has(deps.storage, depo_key.clone()){
-    //     let curr_ledger = LEDGER.load(deps.storage, depo_key).unwrap();  
-    //     for coin in curr_ledger.into_iter() {
-
-    //     }      
-    //     new_ledger = coin(curr_ledger.amount.checked_add(deposit.amount).unwrap().u128(),
-    //         curr_deposit.denom);
-    // } else {
-    //     new_deposit = deposit.clone();
-    // }
-
-    // LEDGER.save(deps.storage,  depo_key,  &new_deposit)?;
-
-    //sender, type
-    // LEDGER.save(deps.storage, &cache.sender, &Ledger{etf_type: cache.etf_name,
-    //     tokens: vec![coin(amount_swapped.parse::<u128>().unwrap(), denom_swapped.clone())]
-    //     }
-    // )?;
-
-    // HERE THE LOGIC FOR VERIFYING IF EVERYTHING WENT THROUGH PROPERLY
-    // IF SO, SAVE TO STATE
-    // IF NOT, REVERT 
-    // where to keep this logic?
+    INITIAL_SWAP.save(deps.storage, &cache.sender, &coin(initial_amount_swapped.parse::<u128>().unwrap(), 
+                    initial_denom_swapped.to_owned()))?;
 
     return Ok(Response::default()
-        .add_attribute("swap_received_amount", initial_amount_swapped)
-        .add_attribute("swap_received_denom", initial_denom_swapped)
+        .add_attribute("initial_swap_received_amount", initial_amount_swapped)
+        .add_attribute("initial_swap_received_denom", initial_denom_swapped)
+        .add_attribute("initial_swap_sender", &cache.sender)
         .add_submessages(submessages)
         // .add_attribute("deposit_denom", deposit.denom)
         // .add_attribute("total_deposit_amount", deposit.amount)
@@ -223,12 +210,20 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
                 new_ledger.push(c);
             }
         }      
+    } else {
+        new_ledger.push(coin(amount_swapped.parse::<u128>().unwrap(), denom_swapped.to_owned()));
     }
     LEDGER.save(deps.storage, depo_key, &new_ledger)?;
 
     Ok(Response::default()
         .add_attribute("swap_received_amount", amount_swapped)
-        .add_attribute("swap_received_denom", denom_swapped))
+        .add_attribute("swap_received_denom", denom_swapped)
+        .add_attribute("new_ledger_key", depo_key.0.to_owned())
+        .add_attribute("new_ledger_key2", depo_key.1.to_owned())
+        .add_attribute("new_ledger_val_amnt", new_ledger[0].to_owned().amount)
+        .add_attribute("new_ledger_val_denom", new_ledger[0].to_owned().denom)
+    
+    )
 
  }
     
@@ -288,7 +283,7 @@ pub fn instantiate_swap(
 
 pub fn try_execute_swap_exact_amount_in(
     deps: DepsMut, 
-    env: Env,
+    _env: Env,
     sender: String,
     etf_swap_routes: EtfSwapRoutes,
     deposit: Coin,
@@ -347,12 +342,18 @@ pub fn try_execute_swap_exact_amount_in(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetTokens {sender, etf_type} => to_binary(&query_get_tokens(deps, sender, etf_type)?),
+        QueryMsg::GetInitialSwap {sender} => to_binary(&query_get_initial_swap(deps, sender)?)
     }
 }
 
 fn query_get_tokens(deps: Deps, sender: String, etf_type: String) -> StdResult<GetTokensResponse> {
     let res = LEDGER.load(deps.storage, (&sender, &etf_type))?;
     Ok(GetTokensResponse { tokens_per_etf: res })
+}
+
+fn query_get_initial_swap(deps: Deps, sender: String) -> StdResult<GetInitialSwapResponse> {
+    let res = INITIAL_SWAP.load(deps.storage, &sender)?;
+    Ok(GetInitialSwapResponse {initial_swap: res})
 }
 
 fn create_msg_execute_swap(contract: String, 
@@ -427,7 +428,7 @@ fn get_initial_route_params(deposit_denom: String) -> Result<(String, u64), Cont
         pool_id = 1;
     } else if deposit_denom == "usdc".to_string() {
         deposit_token_out_denom = "uosmo".to_string();
-        pool_id = 678;
+        pool_id = 2; //678;
     } else {
         return Err(ContractError::InvalidDepositDenom {val: deposit_denom.clone()});
     };

@@ -18,6 +18,10 @@ pub enum ContractError {
     #[error("Denom parsing error: {val:?}")]
     DenomParsingError {val: String},
 
+    #[error("No ledger found for provided address: {val:?}")]
+    NoLedgerFoundErr {val: String},
+    
+
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
     // Add any other custom errors you like here.

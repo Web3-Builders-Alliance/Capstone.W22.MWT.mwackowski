@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::helpers::ManagerContract;
-    use crate::msg::{ExecuteMsg, GetTokensResponse, QueryMsg, EtfSwapRoutes, InstantiateMsg, Route};
+    use crate::msg::{ExecuteMsg, GetTokensResponse, QueryMsg, EtfSwapRoutes, InstantiateMsg, Route, GetInitialSwapResponse};
     use cosmwasm_std::{Addr, Coin, Empty, Uint128};
     use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
 
@@ -9,7 +9,7 @@ mod tests {
     use osmo_swap::msg::InstantiateMsg as OsmoInstantiateMsg;
 
     use osmosis_testing::cosmrs::proto::cosmwasm::wasm::v1::MsgExecuteContractResponse;
-    use osmosis_testing::{Gamm, Module, OsmosisTestApp, SigningAccount, Wasm, ExecuteResponse, Runner};
+    use osmosis_testing::{Gamm, Module, OsmosisTestApp, SigningAccount, Wasm, ExecuteResponse, Account};
     use std::path::PathBuf;
 
 
@@ -69,9 +69,10 @@ mod tests {
             .init_account(&[
                 Coin::new(100_000_000_000, "uosmo"),
                 Coin::new(100_000_000_000, "uion"),
-                Coin::new(100_000_000_000, "uusdc"),
+                Coin::new(100_000_000_000, "usdc"),
                 Coin::new(100_000_000_000, "uiou"),
-                Coin::new(100_000_000_000, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2")
+                Coin::new(100_000_000_000, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"),
+                Coin::new(100_000_000_000, "atom")
             ])
             .unwrap();
     
@@ -91,7 +92,7 @@ mod tests {
             .data
             .code_id;
         let swap_resp = wasm
-            .execute(&manager_contract_addr, &ExecuteMsg::InstantiateSwap { code_id: swap_code_id, debug: true }, 
+            .execute(&manager_contract_addr, &ExecuteMsg::InstantiateSwap { code_id: swap_code_id, debug: false }, 
                 &[], &signer)
             .unwrap();
         let swap_contract_addr = parse_swap_init_resp(swap_resp);
@@ -99,31 +100,32 @@ mod tests {
     }
 
 
-    fn setup_pools(app: &OsmosisTestApp, signer: &SigningAccount) -> Vec<u64> {
+    fn setup_pool(app: &OsmosisTestApp, signer: &SigningAccount, first_token_denom: &str, second_token_denom: &str) -> u64 {
         let gamm = Gamm::new(app);
     
         // resulted in `mock_balancer_pool`
         let balancer_pool_id = gamm
             .create_basic_pool(
                 &[
-                    Coin::new(1_000, "uosmo"), 
-                    Coin::new(1_000, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2")],
+                    Coin::new(1_000, first_token_denom), 
+                    Coin::new(1_000, second_token_denom)],
                 signer,
             )
             .unwrap()
             .data
             .pool_id;
     
-        vec![balancer_pool_id]
+        balancer_pool_id
     }
 
 
     #[test]
     fn test_init() {
         with_env_setup(
-            |_app, _wasm, _signer, _code_id, 
+            |_app, _wasm, signer, _code_id, 
                 manager_contract_addr, _swap_code_id, swap_contract_addr| {
                     println!("manager addr: {:?}, swap addr: {:?}", manager_contract_addr, swap_contract_addr);
+                    println!("signer: {:?}", signer.address());
             }
         );
     }
@@ -131,19 +133,20 @@ mod tests {
     // manager addr: "osmo14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sq2r9g9", 
     // contract addr: "osmo1nc5tatafv6eyq7llkr2gv50ff9e22mnf70qgjlv737ktmt4eswrqvlx82r"
     #[test]
-    fn test_single_swap() {
+    fn test_initial_swap() {
         with_env_setup(
             |app, wasm, signer, _code_id, 
                 manager_contract_addr, swap_code_id, swap_contract_addr| {
-                println!("manager addr: {:?}, contract addr: {:?}", manager_contract_addr, swap_contract_addr);
-                let pools = setup_pools(app, &signer);
-                let pool_id = pools[0];
+                println!("manager addr: {:?}, contract addr: {:?}, signer addr: {:?}", manager_contract_addr, swap_contract_addr, signer.address());
+                let pools = setup_pool(app, &signer, "uosmo", "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2");
+                let pool_id = pools;
+                let etf_name = "osmo_atom".to_string();
                 let swap_resp = wasm
 
                     .execute(&manager_contract_addr, &ExecuteMsg::SwapTokens { 
                         initial_balance: Coin::new(11, "uosmo"), 
                         etf_swap_routes: EtfSwapRoutes { 
-                            name: "osmo_ion".to_string(),
+                            name: etf_name.to_owned(),
                             routes: vec![Route{
                                             pool_id: pool_id,
                                             token_out_denom: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2".to_string()
@@ -153,13 +156,84 @@ mod tests {
                         &vec![Coin::new(11, "uosmo")], &signer)
                     .unwrap();
                 // println!("{:?}", swap_resp);
+                let result: String = swap_resp.events.iter()
+                    .filter(|event| event.ty == "wasm" && event.attributes[1].key == "initial_swap_received_amount")
+                    .map(|p| p.attributes[1].value.clone())
+                    .collect();
+                
+                // for ev in swap_resp.events.iter() {
+                //     println!("{:?}", ev);
+                // }
+
+            // let res: GetTokensResponse = wasm
+            // .query(&manager_contract_addr, &QueryMsg::GetTokens { 
+            //     sender: manager_contract_addr.to_owned(), 
+            //     etf_type: etf_name })
+            //     .unwrap();
+            // println!("{:?}", res);
+            let res: GetInitialSwapResponse = wasm
+                .query(&manager_contract_addr, &QueryMsg::GetInitialSwap {  sender: signer.address() })
+                .unwrap();
+            
+            // assert that the initial swap amount has been properly saved
+            assert_eq!(result.parse::<u128>().unwrap(), res.initial_swap.amount.u128());
+
+            }
+        );
+    }
+
+    #[test]
+    fn test_2_swaps() {
+        with_env_setup(
+            |app, wasm, signer, _code_id, 
+                manager_contract_addr, swap_code_id, swap_contract_addr| {
+                println!("manager addr: {:?}, contract addr: {:?}, signer addr: {:?}", manager_contract_addr, swap_contract_addr, signer.address());
+                let pool_id_1 = setup_pool(app, &signer, "uosmo", "atom");
+                let pool_id_2 = setup_pool(app, &signer, "usdc", "uosmo");
+                let pool_id_3 = setup_pool(app, &signer, "uosmo", "uion");
+                println!("{:?} {:?} {:?}", pool_id_1, pool_id_2, pool_id_3);
+                let etf_name = "osmo_atom".to_string();
+                let swap_resp = wasm
+
+                    .execute(&manager_contract_addr, &ExecuteMsg::SwapTokens { 
+                        initial_balance: Coin::new(30, "usdc"), 
+                        etf_swap_routes: EtfSwapRoutes { 
+                            name: etf_name.to_owned(),
+                            routes: vec![Route{
+                                            pool_id: pool_id_1,
+                                            token_out_denom: "atom".to_string()},
+                                        Route{
+                                            pool_id: pool_id_3,
+                                            token_out_denom: "uion".to_string()
+                                        },
+                                        ],
+                            ratios: vec![Uint128::from(33u128), Uint128::from(67u128)] 
+                        } }, 
+                        &vec![Coin::new(30, "usdc")], &signer)
+                    .unwrap();
+                // println!("{:?}", swap_resp);
+                let result: String = swap_resp.events.iter()
+                    .filter(|event| event.ty == "wasm" && event.attributes[1].key == "initial_swap_received_amount")
+                    .map(|p| p.attributes[1].value.clone())
+                    .collect();
+                
                 for ev in swap_resp.events.iter() {
                     println!("{:?}", ev);
                 }
-            // app.query(path, query)
-            // let res: QueryEpochsInfoResponse = wasm
-            // .query(&contract_addr, &QueryMsg::QueryEpochsInfo {})
-            // .unwrap();
+
+            // let res: GetTokensResponse = wasm
+            // .query(&manager_contract_addr, &QueryMsg::GetTokens { 
+            //     sender: manager_contract_addr.to_owned(), 
+            //     etf_type: etf_name })
+            //     .unwrap();
+            // println!("{:?}", res);
+            let res: GetInitialSwapResponse = wasm
+                .query(&manager_contract_addr, &QueryMsg::GetInitialSwap {  sender: signer.address() })
+                .unwrap();
+            
+            // assert that the initial swap amount has been properly saved
+            assert_eq!(result.parse::<u128>().unwrap(), res.initial_swap.amount.u128());
+
             }
         );
     }

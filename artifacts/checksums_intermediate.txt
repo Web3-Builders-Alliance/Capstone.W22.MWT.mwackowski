@@ -1,2 +1,2 @@
 723e7250f7e9053895f0a18b2ec8fc416776196317b08db2932f30c650375d21  target/wasm32-unknown-unknown/release/osmo_swap.wasm
-47d8a46922dd15536316eec4b1bd144e358632b3c2696c4975ad8790ae2039fc  target/wasm32-unknown-unknown/release/osmo_swap_manager.wasm
+18c2901832106c5c198e52682afdc3185f57ea87655196db09320779528db161  target/wasm32-unknown-unknown/release/osmo_swap_manager.wasm

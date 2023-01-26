@@ -19,8 +19,12 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetTokens {
-    sender: String,
-    etf_type: String},
+        sender: String,
+        etf_type: String
+    },
+    GetInitialSwap {
+        sender: String
+    }
 }
 
 // We define a custom struct for each query response
@@ -28,6 +32,12 @@ pub enum QueryMsg {
 pub struct GetTokensResponse {
     pub tokens_per_etf: Vec<Coin>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct GetInitialSwapResponse {
+    pub initial_swap: Coin
+}
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct EtfSwapRoutes {

@@ -33,3 +33,4 @@ pub const INITIAL_DEPOSIT: Map<(&str, &str), Coin> = Map::new("usdcbalance");
 
 pub const ETF_CACHE: Map<u64, Cache> = Map::new("cache");
 pub const INITIAL_DEPOSIT_CACHE: Item<Coin> = Item::new("initial_deposit_cache");
+pub const INITIAL_SWAP: Map<&str, Coin> = Map::new("initial_swap");
