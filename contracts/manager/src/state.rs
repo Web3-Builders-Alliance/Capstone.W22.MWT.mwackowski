@@ -1,4 +1,4 @@
-use cosmwasm_std::Coin;
+use cosmwasm_std::{Coin, Addr};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -24,13 +24,24 @@ pub struct Cache {
     pub etf_swap_routes: EtfSwapRoutes
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct MintCache {
+    pub etf_name: String,
+    pub etf_symbol: String
+}
+
+// contracts
+pub const MANAGER_CONTRACT: Item<Addr> = Item::new("manager_contract");
 pub const SWAP_CONTRACT: Map<&str, String> = Map::new("swap_contract");
+pub const MINT_CONTRACTS: Map<&str, String> = Map::new("mint_contracts");
 
 //sender, type
 pub const LEDGER: Map<(&str, &str), Vec<Coin>> = Map::new("ledger");
 //sender, type
 pub const INITIAL_DEPOSIT: Map<(&str, &str), Coin> = Map::new("usdcbalance");
+pub const INITIAL_SWAP: Map<&str, Coin> = Map::new("initial_swap");
 
 pub const ETF_CACHE: Map<u64, Cache> = Map::new("cache");
+pub const MINT_CACHE: Item<MintCache> = Item::new("mint_cache");
 pub const INITIAL_DEPOSIT_CACHE: Item<Coin> = Item::new("initial_deposit_cache");
-pub const INITIAL_SWAP: Map<&str, Coin> = Map::new("initial_swap");
+

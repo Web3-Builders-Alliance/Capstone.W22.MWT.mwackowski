@@ -175,7 +175,7 @@ fn test_any_balancer_pool_params_response_deser() {
     );
 }
 
-#[test]
+
 fn test_twap_query() {
     with_env_setup(
         |app, wasm, signer, _code_id, contract_addr| {

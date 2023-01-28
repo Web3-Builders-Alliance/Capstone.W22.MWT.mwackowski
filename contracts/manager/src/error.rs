@@ -21,6 +21,14 @@ pub enum ContractError {
     #[error("No ledger found for provided address: {val:?}")]
     NoLedgerFoundErr {val: String},
     
+    #[error("Could not find provided etf_name: {val:?} in storage; mint contract not instantiated")]
+    MintContractNotFound {val: String},
+
+    #[error("Invalid parameters: ratios and routes should have the same length")]
+    InvalidEntryParams {},
+
+    #[error("Token {val:?} not found in pool")]
+    PoolTokenNotFound {val: String},
 
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },

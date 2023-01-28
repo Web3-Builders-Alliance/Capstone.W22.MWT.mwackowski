@@ -2,14 +2,14 @@
 mod tests {
     use crate::helpers::ManagerContract;
     use crate::msg::{ExecuteMsg, GetTokensResponse, QueryMsg, EtfSwapRoutes, InstantiateMsg, Route, GetInitialSwapResponse};
-    use cosmwasm_std::{Addr, Coin, Empty, Uint128};
-    use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
+    use cosmwasm_std::{Addr, Coin, Empty, Uint128, BankQuery};
+    use cw_multi_test::{App};
 
-
-    use osmo_swap::msg::InstantiateMsg as OsmoInstantiateMsg;
+    use cosmrs::proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
 
     use osmosis_testing::cosmrs::proto::cosmwasm::wasm::v1::MsgExecuteContractResponse;
-    use osmosis_testing::{Gamm, Module, OsmosisTestApp, SigningAccount, Wasm, ExecuteResponse, Account};
+    use osmosis_testing::{Gamm, Module, OsmosisTestApp, SigningAccount, Wasm, ExecuteResponse, Account, Runner, cosmrs, Bank};
+
     use std::path::PathBuf;
 
 
@@ -30,15 +30,6 @@ mod tests {
         .unwrap()
     }
 
-    fn swap(app: &mut App, manager_contract: &ManagerContract, contract_addr: String,
-    usdc_balance: Coin, etf_type: EtfSwapRoutes) {
-        let msg = ExecuteMsg::SwapTokens { 
-            initial_balance: usdc_balance, 
-            etf_swap_routes: etf_type };
-
-        let cosmos_msg = manager_contract.call(msg).unwrap();
-        app.execute(Addr::unchecked(USER), cosmos_msg).unwrap();
-    }
 
     fn get_tokens(app: &App, manager_contract: &ManagerContract, sender: String, etf_type: String ) -> GetTokensResponse {
         app.wrap()
@@ -46,12 +37,8 @@ mod tests {
             .unwrap()
     }
 
-    // fn get_count(app: &App, contract_addr: &str) -> GetCountResponse {
-    //     app.wrap()
-    //         .query_wasm_smart(contract_addr, &counter::QueryMsg::GetCount {})
-    //         .unwrap()
-    // }
-    fn parse_swap_init_resp(swap_response: ExecuteResponse<MsgExecuteContractResponse>) -> String {
+ 
+    fn parse_init_response(swap_response: ExecuteResponse<MsgExecuteContractResponse>) -> String {
         let result:String = swap_response
         .events
         .iter()
@@ -61,9 +48,9 @@ mod tests {
     }
 
     fn with_env_setup(
-        run: impl Fn(&OsmosisTestApp, Wasm<OsmosisTestApp>, SigningAccount, u64, String, u64, String)
+        run: impl Fn(&OsmosisTestApp, Wasm<OsmosisTestApp>, SigningAccount, String, String, String)
     ) {
-        let app = OsmosisTestApp::new();
+        let app = OsmosisTestApp::default();
         let wasm = Wasm::new(&app);
         let signer = app
             .init_account(&[
@@ -86,6 +73,18 @@ mod tests {
             .unwrap()
             .data
             .address;
+        let mint_code_id = wasm
+            .store_code(&get_wasm_byte_code("cw20_base.wasm"), None, &signer)
+            .unwrap()
+            .data
+            .code_id;
+        let mint_init_resp = wasm
+            .execute(&manager_contract_addr, &ExecuteMsg::InstantiateCw20 { 
+                etf_name: "WladziooEtf_First".to_string(), 
+                etf_symbol: "wetfone".to_string(), 
+                code_id: mint_code_id
+            }, &[], &signer)
+            .unwrap();
         let swap_code_id = wasm
             .store_code(&get_wasm_byte_code("osmo_swap.wasm"), None, &signer)
             .unwrap()
@@ -95,8 +94,11 @@ mod tests {
             .execute(&manager_contract_addr, &ExecuteMsg::InstantiateSwap { code_id: swap_code_id, debug: false }, 
                 &[], &signer)
             .unwrap();
-        let swap_contract_addr = parse_swap_init_resp(swap_resp);
-        run(&app, wasm, signer, manage_code_id, manager_contract_addr, swap_code_id, swap_contract_addr)
+        let swap_contract_addr = parse_init_response(swap_resp);
+        let mint_contract_addr = parse_init_response(mint_init_resp);
+        println!("manager addr: {:?},\ncontract addr: {:?},\nsigner addr: {:?},\nmint addr: {:?}", 
+            manager_contract_addr, swap_contract_addr, signer.address(), mint_contract_addr);
+        run(&app, wasm, signer, manager_contract_addr, swap_contract_addr, mint_contract_addr )
     }
 
 
@@ -107,8 +109,8 @@ mod tests {
         let balancer_pool_id = gamm
             .create_basic_pool(
                 &[
-                    Coin::new(1_000, first_token_denom), 
-                    Coin::new(1_000, second_token_denom)],
+                    Coin::new(10_000, first_token_denom), 
+                    Coin::new(10_000, second_token_denom)],
                 signer,
             )
             .unwrap()
@@ -118,29 +120,22 @@ mod tests {
         balancer_pool_id
     }
 
-
     #[test]
     fn test_init() {
         with_env_setup(
-            |_app, _wasm, signer, _code_id, 
-                manager_contract_addr, _swap_code_id, swap_contract_addr| {
-                    println!("manager addr: {:?}, swap addr: {:?}", manager_contract_addr, swap_contract_addr);
-                    println!("signer: {:?}", signer.address());
+            |_app, _wasm, _signer, _manager_contract_addr, 
+                _swap_contract_addr, _mint_contract_addr| {
             }
         );
     }
-    
-    // manager addr: "osmo14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sq2r9g9", 
-    // contract addr: "osmo1nc5tatafv6eyq7llkr2gv50ff9e22mnf70qgjlv737ktmt4eswrqvlx82r"
+
     #[test]
     fn test_initial_swap() {
         with_env_setup(
-            |app, wasm, signer, _code_id, 
-                manager_contract_addr, swap_code_id, swap_contract_addr| {
-                println!("manager addr: {:?}, contract addr: {:?}, signer addr: {:?}", manager_contract_addr, swap_contract_addr, signer.address());
+            |app, wasm, signer, manager_contract_addr, swap_contract_addr, mint_contract_addr| {
                 let pools = setup_pool(app, &signer, "uosmo", "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2");
                 let pool_id = pools;
-                let etf_name = "osmo_atom".to_string();
+                let etf_name = "WladziooEtf_First".to_string();
                 let swap_resp = wasm
 
                     .execute(&manager_contract_addr, &ExecuteMsg::SwapTokens { 
@@ -156,43 +151,48 @@ mod tests {
                         &vec![Coin::new(11, "uosmo")], &signer)
                     .unwrap();
                 // println!("{:?}", swap_resp);
-                let result: String = swap_resp.events.iter()
+                let inital_swap_received_amount: String = swap_resp.events.iter()
                     .filter(|event| event.ty == "wasm" && event.attributes[1].key == "initial_swap_received_amount")
                     .map(|p| p.attributes[1].value.clone())
                     .collect();
                 
-                // for ev in swap_resp.events.iter() {
-                //     println!("{:?}", ev);
-                // }
-
-            // let res: GetTokensResponse = wasm
-            // .query(&manager_contract_addr, &QueryMsg::GetTokens { 
-            //     sender: manager_contract_addr.to_owned(), 
-            //     etf_type: etf_name })
-            //     .unwrap();
-            // println!("{:?}", res);
-            let res: GetInitialSwapResponse = wasm
+            let res_query_get_initial_swap: GetInitialSwapResponse = wasm
                 .query(&manager_contract_addr, &QueryMsg::GetInitialSwap {  sender: signer.address() })
                 .unwrap();
             
             // assert that the initial swap amount has been properly saved
-            assert_eq!(result.parse::<u128>().unwrap(), res.initial_swap.amount.u128());
+            assert_eq!(inital_swap_received_amount.parse::<u128>().unwrap(), res_query_get_initial_swap.initial_swap.amount.u128());
+            for ev in swap_resp.events.iter() {
+                println!("{:?}", ev);
+            };
 
-            }
-        );
+            let signers_minted_balance: cw20::BalanceResponse = wasm
+                    .query(
+                        &mint_contract_addr,
+                        &cw20_base::msg::QueryMsg::Balance { address: signer.address() }
+                    )
+                    .unwrap();
+            let minted_tokens: u128 = swap_resp.events.iter()
+                .filter(|event| event.ty == "wasm" && event.attributes[1].value == "mint")
+                .map(|p| p.attributes[2].value.clone().parse::<u128>().unwrap())
+                .sum();
+            // assert that the amount of minted tokens is equal to signer's balance
+            assert_eq!(signers_minted_balance.balance.u128(), minted_tokens);
+            
+
+        });
     }
 
     #[test]
     fn test_2_swaps() {
         with_env_setup(
-            |app, wasm, signer, _code_id, 
-                manager_contract_addr, swap_code_id, swap_contract_addr| {
-                println!("manager addr: {:?}, contract addr: {:?}, signer addr: {:?}", manager_contract_addr, swap_contract_addr, signer.address());
+            |app, wasm, signer, manager_contract_addr, swap_contract_addr, mint_contract_addr| {
                 let pool_id_1 = setup_pool(app, &signer, "uosmo", "atom");
-                let pool_id_2 = setup_pool(app, &signer, "usdc", "uosmo");
+                let pool_id_2 = setup_pool(app, &signer, "uosmo", "usdc");
                 let pool_id_3 = setup_pool(app, &signer, "uosmo", "uion");
-                println!("{:?} {:?} {:?}", pool_id_1, pool_id_2, pool_id_3);
-                let etf_name = "osmo_atom".to_string();
+                let pool_id_4 = setup_pool(app, &signer, "uosmo", "uiou");
+
+                let etf_name = "WladziooEtf_First".to_string();
                 let swap_resp = wasm
 
                     .execute(&manager_contract_addr, &ExecuteMsg::SwapTokens { 
@@ -211,133 +211,55 @@ mod tests {
                         } }, 
                         &vec![Coin::new(30, "usdc")], &signer)
                     .unwrap();
-                // println!("{:?}", swap_resp);
-                let result: String = swap_resp.events.iter()
-                    .filter(|event| event.ty == "wasm" && event.attributes[1].key == "initial_swap_received_amount")
-                    .map(|p| p.attributes[1].value.clone())
-                    .collect();
-                
-                for ev in swap_resp.events.iter() {
-                    println!("{:?}", ev);
-                }
+                 
+            let result: String = swap_resp.clone().events.iter()
+                .filter(|event| event.ty == "wasm" && event.attributes[1].key == "initial_swap_received_amount")
+                .map(|p| p.attributes[1].value.clone())
+                .collect();
 
-            // let res: GetTokensResponse = wasm
-            // .query(&manager_contract_addr, &QueryMsg::GetTokens { 
-            //     sender: manager_contract_addr.to_owned(), 
-            //     etf_type: etf_name })
-            //     .unwrap();
-            // println!("{:?}", res);
             let res: GetInitialSwapResponse = wasm
-                .query(&manager_contract_addr, &QueryMsg::GetInitialSwap {  sender: signer.address() })
+                .query(&manager_contract_addr, &QueryMsg::GetInitialSwap {  sender: signer.address().to_owned() })
                 .unwrap();
             
-            // assert that the initial swap amount has been properly saved
+            // assert that the initial swap amount has been properly saved in storage
             assert_eq!(result.parse::<u128>().unwrap(), res.initial_swap.amount.u128());
 
+            let query_tokens_res: GetTokensResponse = wasm
+            .query(&manager_contract_addr, &QueryMsg::GetTokens { 
+                sender: signer.address(), 
+                etf_type: etf_name.to_owned() })
+                .unwrap();
+
+            let swap_received_amounts: Vec<String> = swap_resp.events.iter()
+                .filter(|event| event.ty == "wasm" && event.attributes[1].key =="swap_received_amount")
+                .map(|p| p.attributes[1].value.clone())
+                .collect();
+            
+            for ev in swap_resp.events.iter() {
+                println!("{:?}", ev);
             }
-        );
+
+            let sum_received: u128 = swap_received_amounts.iter().map(|amnt| amnt.parse::<u128>().unwrap()).sum();
+            let sum_query_ledger: u128 = query_tokens_res.tokens_per_etf.iter().map(|c| c.amount.u128()).sum();
+            // assert that total received amount has been properly saved into storage (ledger)
+            assert_eq!(sum_received, sum_query_ledger);
+
+            let signers_minted_balance: cw20::BalanceResponse = wasm
+                    .query(
+                        &mint_contract_addr,
+                        &cw20_base::msg::QueryMsg::Balance { address: signer.address() }
+                    )
+                    .unwrap();
+
+            let minted_tokens: u128 = swap_resp.events.iter()
+                .filter(|event| event.ty == "wasm" && event.attributes[1].value == "mint")
+                .map(|p| p.attributes[2].value.clone().parse::<u128>().unwrap())
+                .sum();
+            // assert that the amount of minted tokens is equal to signer's balance
+            assert_eq!(signers_minted_balance.balance.u128(), minted_tokens);
+
+
+            });
     }
     
-    #[test]
-    fn create_one_counter() {
-        // let (mut manager_app, mut osmo_app, manager_id, swap_id, swap_addr) = store_code();
-        // let manager_contract = manager_instantiate(&mut manager_app, manager_id);
-
-        // instantiate_new(&mut app, &manager_contract, counter_id);
-        // let res = get_tokens(&app, &manager_contract, "blabla".to_string(), "first".to_string());
-        // println!("{:?}", res);
-        // assert_eq!(res.contracts.len(), 1);
-        // assert_eq!(res.contracts[0].1.address, "contract1");
-    }
-
-    // #[test]
-    // fn create_two_counters() {
-    //     let (mut app, manager_id, counter_id) = store_code();
-    //     let manager_contract = manager_instantiate(&mut app, manager_id);
-
-    //     instantiate_new(&mut app, &manager_contract, counter_id);
-    //     instantiate_new(&mut app, &manager_contract, counter_id);
-
-    //     let res = get_tokens(&app, &manager_contract, "blabla".to_string(), "first".to_string());
-
-    //     // assert_eq!(res.contracts.len(), 2);
-    //     // assert_eq!(res.contracts[0].1.address, "contract1");
-    //     // assert_eq!(res.contracts[1].1.address, "contract2");
-    // }
-
-    // #[test]
-    // fn create_counter_and_increment() {
-    //     let (mut app, manager_id, counter_id) = store_code();
-    //     let manager_contract = manager_instantiate(&mut app, manager_id);
-
-    //     instantiate_new(&mut app, &manager_contract, counter_id);
-    //     increment(&mut app, &manager_contract, "contract1".to_string());
-
-    //     let res = get_contracts(&app, &manager_contract);
-    //     let res = get_count(&app, res.contracts[0].1.address.as_str());
-    //     assert_eq!(res.count, 1);
-    // }
-
-    // #[test]
-    // fn create_counter_and_increment_twice() {
-    //     let (mut app, manager_id, counter_id) = store_code();
-
-    //     let manager_contract = manager_instantiate(&mut app, manager_id);
-
-    //     instantiate_new(&mut app, &manager_contract, counter_id);
-    //     increment(&mut app, &manager_contract, "contract1".to_string());
-    //     increment(&mut app, &manager_contract, "contract1".to_string());
-
-    //     let res = get_contracts(&app, &manager_contract); // query contracts from manager
-    //     let res = get_count(&app, res.contracts[0].1.address.as_str());
-    //     assert_eq!(res.count, 2);
-    // }
-
-    // #[test]
-    // fn create_counter_and_increment_and_reset() {
-    //     let (mut app, manager_id, counter_id) = store_code();
-    //     let manager_contract = manager_instantiate(&mut app, manager_id);
-    //     instantiate_new(&mut app, &manager_contract, counter_id);
-
-    //     increment(&mut app, &manager_contract, "contract1".to_string());
-
-    //     let res = get_contracts(&app, &manager_contract);
-    //     let res = get_count(&app, res.contracts[0].1.address.as_str());
-    //     assert_eq!(res.count, 1);  
-
-    //     reset(&mut app, &manager_contract, "contract1".to_string(), 0);
-        
-    //     let res = get_contracts(&app, &manager_contract); // query contracts from manager
-    //     let res = get_count(&app, res.contracts[0].1.address.as_str()); 
-    //     assert_eq!(res.count, 0);
-    // }
-
-    // #[test]
-    // fn create_two_counters_and_increment_each() {
-    //     let (mut app, manager_id, counter_id) = store_code();
-
-    //     let manager_contract1 = manager_instantiate(&mut app, manager_id);
-    //     let manager_contract2 = manager_instantiate(&mut app, manager_id);
-    //     println!("counter id: {}", counter_id);
-    //     instantiate_new(&mut app, &manager_contract1, counter_id); 
-    //     instantiate_new(&mut app, &manager_contract2, counter_id);
-        
-    //     let res = get_contracts(&app, &manager_contract1);
-    //     assert_eq!(res.contracts.len(), 1);
-        
-    //     let res = get_contracts(&app, &manager_contract2);
-    //     assert_eq!(res.contracts.len(), 1);
-        
-    //     increment(&mut app, &manager_contract1, "contract2".to_string()); // adds 1 to counter (1)
-    //     increment(&mut app, &manager_contract2, "contract3".to_string()); // adds 1 to counter (2)
-    //     println!(">> manager_contract1 addr: {}", manager_contract1.addr());
-    //     println!(">> manager_contract2 addr: {}", manager_contract2.addr());
-    //     let res = get_contracts(&app, &manager_contract1); // query contracts from manager
-    //     let res = get_count(&app, res.contracts[0].1.address.as_str()); 
-    //     assert_eq!(res.count, 1);
-
-    //     let res = get_contracts(&app, &manager_contract2); // query contracts from manager
-    //     let res = get_count(&app, res.contracts[0].1.address.as_str()); 
-    //     assert_eq!(res.count, 1);   
-    // }
 }

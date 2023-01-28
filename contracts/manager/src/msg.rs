@@ -9,10 +9,24 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    InstantiateSwap { code_id: u64, debug: bool }, // should I use it within manager contract or maybe instantiate both indepenedntly?
+    InstantiateSwap { 
+        code_id: u64, 
+        debug: bool,
+    }, // should I use it within manager contract or maybe instantiate both indepenedntly?
+    InstantiateCw20 { 
+        code_id: u64, 
+        etf_name: String, 
+        etf_symbol: String,
+    },
     SwapTokens { 
         initial_balance: Coin,
-        etf_swap_routes: EtfSwapRoutes }
+        etf_swap_routes: EtfSwapRoutes,
+    },
+    MintTokens {
+        recipient: String,
+        amount_to_mint: Uint128,
+        mint_contract_address: String,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

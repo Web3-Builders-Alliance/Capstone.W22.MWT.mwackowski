@@ -40,6 +40,7 @@ cosmwasm-std = { workspace = true}
 cosmwasm-storage = { workspace = true } 
 cw-storage-plus = { workspace = true }  #"0.16.0"
 cw2 = { workspace = true }  #"0.16.0"
+cw20 = {workspace = true }
 cw-utils = { workspace = true }  #"0.16.0"
 schemars = { workspace = true } #3"0.8.8"
 serde = { workspace = true } #{ version = "1.0.137", default-features = false, features = ["derive"] }
@@ -49,6 +50,7 @@ prost = {workspace = true }
 cosmwasm-schema = {workspace = true }
 osmo-swap = { path = "../swap", version = "0.1.0", features = ["library"]}
 osmosis-std = {path = "./../../packages/osmosis-std"}
+cw20-base = { path = "../cw20-base", features = ["library"] }
 
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"
