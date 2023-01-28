@@ -92,7 +92,7 @@ describe("swap Fullstack Test", () => {
         console.log("Osmo contract: %s",JSON.stringify(res.logs[0].events));
     }).timeout(100000);
 
-    xit("2 Upload manager code to testnet", async () => {
+    it("2 Upload manager code to testnet", async () => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025uosmo");
         let res = await client.upload(await getAddress(mnemonic), manager_wasm, "auto");
         console.log("Manager contract: %s",JSON.stringify(res.logs[0].events));

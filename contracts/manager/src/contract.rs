@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, WasmMsg, Reply, StdError, Empty, Coin, coin, Uint128, WasmQuery, BankMsg, attr, CosmosMsg,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, WasmMsg, Reply, StdError, Empty, Coin, coin, Uint128, BankMsg, attr, Addr,
 };
 
 use cw2::{set_contract_version, CONTRACT};
@@ -12,7 +12,7 @@ use osmo_swap;
 use cw20_base;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes, GetInitialSwapResponse};
-use crate::state::{INITIAL_DEPOSIT, INITIAL_DEPOSIT_CACHE, LEDGER, ETF_CACHE, Cache, SWAP_CONTRACT, INITIAL_SWAP, MINT_CONTRACTS, MINT_CACHE, MintCache, MANAGER_CONTRACT};
+use crate::state::{INITIAL_DEPOSIT, INITIAL_DEPOSIT_CACHE, LEDGER, ETF_CACHE, EtfCache, SWAP_CONTRACT, INITIAL_SWAP, MINT_CONTRACTS, MINT_CACHE, MintCache, MANAGER_CONTRACT, ETF_POOLS, REVERT_SWAP_CACHE};
 use osmosis_std::types::osmosis::gamm::v1beta1::{SwapAmountInRoute, QueryPoolResponse, Pool, GammQuerier};
 use prost::DecodeError;
 
@@ -25,7 +25,8 @@ const INSTANTIATE_SWAP_REPLY_ID:u64 = 1;
 const INSTANTIATE_CW20_REPLY_ID:u64 = 2;
 const EXECUTE_SWAP_REPLY_ID:u64 = 3;
 const EXECUTE_SWAPS_REPLY_ID:u64 = 4;
-const EXECUTE_MINT_TOKENS_REPLY_ID:u64 = 5;
+const EXECUTE_REVERT_SWAPS_REPLY_ID: u64 = 5;
+// const EXECUTE_MINT_TOKENS_REPLY_ID:u64 = 5;
 
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -49,8 +50,8 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::InstantiateSwap { code_id, debug} 
-            => instantiate_swap(deps, info, code_id, debug),
-        ExecuteMsg::InstantiateCw20 { code_id, etf_name, etf_symbol} => instantiate_cw20(deps, info, env, code_id, etf_name, etf_symbol),
+            => execute_instantiate_swap(deps, info, code_id, debug),
+        ExecuteMsg::InstantiateCw20 { code_id, etf_name, etf_symbol} => execute_instantiate_cw20(deps, info, env, code_id, etf_name, etf_symbol),
         ExecuteMsg::SwapTokens { initial_balance, etf_swap_routes} => try_execute_swap_exact_amount_in(
             deps, 
             env,
@@ -58,11 +59,13 @@ pub fn execute(
             etf_swap_routes,
             initial_balance
         ),
-        ExecuteMsg::MintTokens {recipient: _, amount_to_mint, mint_contract_address} => execute_mint_tokens(
+        ExecuteMsg::MintTokens {amount_to_mint, mint_contract_address} => execute_mint_tokens(
             info.sender.to_string(), 
             amount_to_mint, 
             mint_contract_address
-        )
+        ),
+        ExecuteMsg::QueryMintTokens {sender, mint_contract} => get_token_balance(deps, info, mint_contract, sender),
+        ExecuteMsg::RedeemTokens {etf_name} => redeem_tokens(deps, info, etf_name)
     }
 }
 
@@ -74,6 +77,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
         EXECUTE_SWAP_REPLY_ID => handle_swap_reply(deps, msg),
         EXECUTE_SWAPS_REPLY_ID => handle_swaps_reply(deps, msg),
         // EXECUTE_MINT_TOKENS_REPLY_ID => handle_mint_tokens_reply(deps, msg),
+        EXECUTE_REVERT_SWAPS_REPLY_ID => handle_revert_swaps(deps, msg),
         id => Err(ContractError::Std(StdError::generic_err(format!("Unknown reply id: {}", id)))),
     }
 }
@@ -82,7 +86,8 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
 // should I save owner as well?
 fn handle_instantiate_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractError> {
     let res = parse_reply_instantiate_data(msg).unwrap();
-    SWAP_CONTRACT.save(deps.storage,  &MAP_KEY, &res.contract_address)?;
+    let checked: Addr = deps.api.addr_validate(&res.contract_address)?;
+    SWAP_CONTRACT.save(deps.storage,&checked)?;
     Ok(Response::default())
 }
 
@@ -98,39 +103,24 @@ fn handle_instantiate_cw20_reply(deps: DepsMut, msg: Reply) -> Result<Response, 
 
 fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractError> {
 
+    let result: String = parse_swap_reply(msg.clone());
     // Filter the result so that it returns single event value
-    let result: String = msg.result.clone()
-        .unwrap()
-        .events.iter()
-        .filter(|event| event.ty == "token_swapped" && event.attributes[4].key == "tokens_out")
-        .map(|p| p.attributes[4].value.clone())
-        .collect();
+    // let result: String = msg.result.clone()
+    //     .unwrap()
+    //     .events.iter()
+    //     .filter(|event| event.ty == "token_swapped" && event.attributes[4].key == "tokens_out")
+    //     .map(|p| p.attributes[4].value.clone())
+    //     .collect();
 
     // The result will be in a format: 9999ibc/sometxhash, so we need to split te initial numbers and the rest 
     let (initial_amount_swapped, initial_denom_swapped) = split_result_no_regex(result.to_owned());
 
+    let cache = ETF_CACHE.load(deps.storage).unwrap();
 
-    let cache = ETF_CACHE.load(deps.storage, 0u64).unwrap();
-    // ETF_CACHE.remove(deps.storage, 0u64);
-
-    // let depo_key = (cache.sender.as_str(), cache.etf_swap_routes.name.as_str());
-    // let deposit = INITIAL_DEPOSIT.load(deps.storage, depo_key)?;
-    let swap_addr = SWAP_CONTRACT.load(deps.storage, &MAP_KEY).unwrap();
+    let swap_addr = SWAP_CONTRACT.load(deps.storage).unwrap();
     let initial_deposit =  INITIAL_DEPOSIT_CACHE.load(deps.storage)?;
     let (initial_deposit_token_out_denom, _initial_pool_id) = get_initial_route_params(initial_deposit.to_owned().denom).unwrap();
-
-    // validate length of provided routes and ratios vectors
     let etf_swap_routes = cache.etf_swap_routes;
-    if &etf_swap_routes.ratios.len() != &etf_swap_routes.routes.len() {
-        return Err(ContractError::InvalidEntryParams{})
-    }
-
-    { 
-        let ratios_sum: Uint128 = etf_swap_routes.clone().ratios.iter().sum();
-        if ratios_sum != Uint128::from(100u128) {
-            panic!("Sum of ratios needs to be equal to 100")
-        }
-    }
     
     // validate if routes are passed properly before moving into execution
     for route in etf_swap_routes.clone().routes.into_iter() {
@@ -147,22 +137,18 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
                 msg: e.to_string(),
             })?;
         
-        if !&pool.pool_assets.iter().any(|i| i.token.as_ref().unwrap().denom == route.token_out_denom) {
+        if !&pool.pool_assets.iter().any(|i| i.token.to_owned().unwrap().denom == route.token_out_denom) {
             return Err(ContractError::PoolTokenNotFound { val: route.token_out_denom })
-            // panic!("{:?} not found in allowed pool's token_out_denoms", route.token_out_denom) 
         }
     }
 
-
-    // let depo_key = (cache.sender.as_str(), cache.etf_swap_routes.name.as_str());
-    // let deposit = INITIAL_DEPOSIT.load(deps.storage, depo_key)?;
     let mut submessages: std::vec::Vec<SubMsg<Empty>> = vec![];
     let mut token_in_amnt_adder = Uint128::zero();
     let init_amnt = Uint128::from(initial_amount_swapped.parse::<u128>().unwrap());
     for (i, (route, ratio)) in etf_swap_routes.clone().routes.into_iter().zip(etf_swap_routes.ratios.into_iter()).enumerate() {
 
-        // no need to swap for deposit denoms or denoms that have been received through initial swap
-        if route.token_out_denom == initial_deposit_token_out_denom.to_owned() { // || route.token_out_denom == initial_deposit.denom {
+        // no need to swap for denoms that have been received through initial swap
+        if route.token_out_denom == initial_deposit_token_out_denom.to_owned() {
             continue 
         } else {
             let token_in_amount: Uint128;
@@ -177,6 +163,9 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
                 swap_addr.to_string(), route.pool_id, route.token_out_denom.to_owned(), 
                 coin(token_in_amount.into(), initial_deposit_token_out_denom.to_owned())
             );
+            if !ETF_POOLS.has(deps.storage, &route.token_out_denom) {
+                ETF_POOLS.save(deps.storage, &route.token_out_denom, &route.pool_id)?;
+            }
             submessages.push(SubMsg::reply_on_success(execute_message, EXECUTE_SWAPS_REPLY_ID));
         }
     }
@@ -196,21 +185,19 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
             attr("initial_swap_received_amount", initial_amount_swapped),
             attr("initial_swap_received_denom", initial_denom_swapped),
             attr("initial_swap_sender", &cache.sender),
-            attr("execute_mint_tokens_amount", initial_deposit.amount),
-            attr("execute_mint_tokens_recipient", cache.sender),
+            // attr("execute_mint_tokens_amount", initial_deposit.amount),
+            // attr("execute_mint_tokens_recipient", cache.sender),
             ])
         .add_submessages(submessages)
         .add_message(msg_execute_mint_tokens)
         );            
-        
-        // .add_attribute("deposit_denom", deposit.denom)
-        // .add_attribute("total_deposit_amount", deposit.amount)
 
  }
 
  fn handle_swaps_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractError> {
 
         // Filter the result so that it returns single event value
+
     let result: String = msg.result.clone()
         .unwrap()
         .events.iter()
@@ -219,7 +206,7 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
         .collect();
     let (amount_swapped, denom_swapped) = split_result_no_regex(result.to_owned());
 
-    let cache = ETF_CACHE.load(deps.storage, 0u64).unwrap();
+    let cache = ETF_CACHE.load(deps.storage).unwrap();
     let depo_key = (cache.sender.as_str(), cache.etf_swap_routes.name.as_str());
 
     let mut new_ledger: Vec<Coin> = vec![];
@@ -236,11 +223,9 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
             } 
         }
     }
-
     if !found {
         new_ledger.push(coin(amount_swapped.parse::<u128>().unwrap(), denom_swapped.to_owned()));
     }
-    
     LEDGER.save(deps.storage, depo_key, &new_ledger)?;
 
     // let initial_depo_cache = INITIAL_DEPOSIT_CACHE.load(deps.storage)?;
@@ -262,7 +247,31 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
     )
 
  }
-   
+
+ fn handle_revert_swaps(deps: DepsMut, msg: Reply) -> Result<Response, ContractError> {
+    let (amount_swapped_string, denom_swapped) = split_result_no_regex(parse_swap_reply(msg));
+    let amount_swapped = amount_swapped_string.parse::<u128>().unwrap();
+    let mut updated: Uint128 = Uint128::zero();
+    // let revert_swap_cache = REVERT_SWAP_CACHE.load(deps.storage)?;
+    if  REVERT_SWAP_CACHE.may_load(deps.storage).unwrap() != None {
+        REVERT_SWAP_CACHE.update(deps.storage, |mut rev_coin| -> Result<_, ContractError> {
+            updated = rev_coin.amount.checked_add(amount_swapped.into()).unwrap();
+            rev_coin.amount = updated;
+            Ok(rev_coin)
+        })?;        
+    } else {
+        REVERT_SWAP_CACHE.save(deps.storage, &coin(amount_swapped, denom_swapped.to_owned()))?
+    }
+
+    Ok(Response::default()
+    .add_attributes([
+        attr("swap_received_amount", amount_swapped_string),
+        attr("swap_received_denom", denom_swapped),
+        attr("total_swapped_amount", updated),
+    ])
+    )
+
+ }
  
  fn handle_mint_tokens_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractError>  {
     unimplemented!()
@@ -301,7 +310,7 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
 //     Ok(Response::default())
 // }
 
-pub fn instantiate_swap(
+pub fn execute_instantiate_swap(
     _deps: DepsMut,
     _info: MessageInfo,
     code_id: u64,
@@ -320,7 +329,7 @@ pub fn instantiate_swap(
         .add_attribute("method", "instantiate_from_manager"))
 }
 
-pub fn instantiate_cw20(
+pub fn execute_instantiate_cw20(
     deps: DepsMut, 
     _info: MessageInfo, 
     env: Env, 
@@ -367,8 +376,18 @@ pub fn try_execute_swap_exact_amount_in(
         return Err(ContractError::MintContractNotFound{val: etf_swap_routes.name});
     }
 
-    let swap_contract_addr = SWAP_CONTRACT.load(deps.storage, &MAP_KEY)?;
-    let bank_msg = BankMsg::Send { to_address: swap_contract_addr.to_owned(), amount: vec![deposit.clone()] };
+    // validate length of provided routes and ratios vectors
+    if &etf_swap_routes.ratios.len() != &etf_swap_routes.routes.len() {
+        return Err(ContractError::InvalidEntryParams{});
+    }
+    // validate sum of ratios
+    let ratios_sum: Uint128 = etf_swap_routes.clone().ratios.iter().sum();
+    if ratios_sum != Uint128::from(100u128) {
+        return Err(ContractError::InvalidRatio{});
+    }
+
+    let swap_contract_addr = SWAP_CONTRACT.load(deps.storage)?;
+    let bank_msg = BankMsg::Send { to_address: swap_contract_addr.to_string(), amount: vec![deposit.clone()] };
 
     // let's keep track of user's deposited USDC
     let depo_key = (sender.as_str(), etf_swap_routes.name.as_str());
@@ -398,8 +417,7 @@ pub fn try_execute_swap_exact_amount_in(
     );
     let submessage:SubMsg<Empty> = SubMsg::reply_on_success(execute_message, EXECUTE_SWAP_REPLY_ID);
 
-    ETF_CACHE.save(deps.storage, 0u64, &Cache { sender: sender.to_string(), etf_swap_routes: etf_swap_routes.clone()})?;
-
+    ETF_CACHE.save(deps.storage, &EtfCache { sender: sender.to_string(), etf_swap_routes: etf_swap_routes.clone()})?;
 
     Ok(Response::new()
         .add_message(bank_msg)
@@ -429,6 +447,32 @@ fn execute_mint_tokens(
         .add_message(execute_message))
 }
 
+fn redeem_tokens(deps: DepsMut, info: MessageInfo, etf_name: String) -> Result<Response, ContractError> { 
+    if !LEDGER.has(deps.storage, (&info.sender.as_str(), &etf_name.as_str())) {
+        return Err(ContractError::Unauthorized{});
+    } 
+    
+    let swap_addr = SWAP_CONTRACT.load(deps.storage)?;
+    let ledger = LEDGER.load(deps.storage, (&info.sender.as_str(), &etf_name.as_str()))?;
+
+    let mut submessages: Vec<SubMsg<Empty>> = vec![];
+    for c in ledger.clone().into_iter() {
+        let pool_id = ETF_POOLS.load(deps.storage, &c.denom)?;
+        let execute_message = create_msg_execute_swap(
+            swap_addr.to_string(), pool_id, "uosmo".to_string(), 
+            c);
+        submessages.push(SubMsg::reply_on_success(execute_message, EXECUTE_REVERT_SWAPS_REPLY_ID));
+    }
+
+    Ok(Response::new()
+    .add_submessages(submessages)
+    .add_attribute("first", ledger[0].amount.to_string())
+    .add_attribute("second", ledger[1].amount.to_string())
+    .add_attribute("third", &ledger[0].denom)
+    .add_attribute("fourth", &ledger[1].denom)
+)
+}
+
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
@@ -447,14 +491,21 @@ fn query_get_initial_swap(deps: Deps, sender: String) -> StdResult<GetInitialSwa
     Ok(GetInitialSwapResponse {initial_swap: res})
 }
 
-fn get_token_balance(deps: Deps, contract: String, addr: String) -> StdResult<Uint128> {
-    let resp: cw20::BalanceResponse = deps.querier.query_wasm_smart(
-        contract,
-        &cw20_base::msg::QueryMsg::Balance {
-            address: addr.to_string(),
-        },
-    )?;
-    Ok(resp.balance)
+fn get_token_balance(_deps: DepsMut, info: MessageInfo, mint_contract: String, addr_to_query: String) -> Result<Response, ContractError> {
+    if &addr_to_query != &info.sender {
+        return Err(ContractError::Unauthorized {  })
+    }
+
+    let execute_query_balance = WasmMsg::Execute {
+        contract_addr: mint_contract.to_string(),
+        funds: vec![],
+        msg: to_binary(&cw20_base::msg::QueryMsg::Balance {
+            address: addr_to_query.to_string(),
+        }).unwrap()
+    };
+    Ok(Response::new()
+    .add_message(execute_query_balance))
+
 }
 
 fn create_msg_execute_swap(contract: String, 
@@ -476,12 +527,11 @@ fn create_msg_execute_swap(contract: String,
         ),
         token_out_min_amount: "1".to_string()
           }).unwrap()
-              // TODO add twap query in order to estimate token_out_min_amount
+        // TODO add twap query in order to estimate token_out_min_amount
 
     };
     execute_message   
 }
-
 
 fn create_msg_execute_mint_tokens(        
     recipient: String,
@@ -497,13 +547,6 @@ fn create_msg_execute_mint_tokens(
             amount: amount_to_mint,
         }).unwrap()
     }
-    // Ok(Response::new()
-    //     .add_attributes(vec![
-    //         attr("execute_mint_tokens_amount", amount_to_mint),
-    //         attr("execute_mint_tokens_recipient", &recipient),
-    //     ])
-    //     .add_message(execute_message))
-
 }
 
 fn split_result_no_regex(coin_str: String) -> (String, String) {
@@ -525,4 +568,13 @@ fn get_initial_route_params(deposit_denom: String) -> Result<(String, u64), Cont
         return Err(ContractError::InvalidDepositDenom {val: deposit_denom.clone()});
     };
     Ok((deposit_token_out_denom, pool_id))
+}
+
+fn parse_swap_reply(msg: Reply) -> String {
+    msg.result.clone()
+    .unwrap()
+    .events.iter()
+    .filter(|event| event.ty == "token_swapped" && event.attributes[4].key == "tokens_out")
+    .map(|p| p.attributes[4].value.clone())
+    .collect()
 }

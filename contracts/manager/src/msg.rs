@@ -23,9 +23,15 @@ pub enum ExecuteMsg {
         etf_swap_routes: EtfSwapRoutes,
     },
     MintTokens {
-        recipient: String,
         amount_to_mint: Uint128,
         mint_contract_address: String,
+    },
+    QueryMintTokens {
+        sender: String,
+        mint_contract: String
+    },
+    RedeemTokens {
+        etf_name: String
     }
 }
 

@@ -30,6 +30,9 @@ pub enum ContractError {
     #[error("Token {val:?} not found in pool")]
     PoolTokenNotFound {val: String},
 
+    #[error("Sum of swap ratios needs to be equal to 100")]
+    InvalidRatio {},
+
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
     // Add any other custom errors you like here.
