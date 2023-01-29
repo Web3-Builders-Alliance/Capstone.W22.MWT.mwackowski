@@ -1,3 +1,3 @@
 723e7250f7e9053895f0a18b2ec8fc416776196317b08db2932f30c650375d21  target/wasm32-unknown-unknown/release/osmo_swap.wasm
 ede661d405143319e71787bddede6732a37121d7e7ab070f19567d1c79fe815c  target/wasm32-unknown-unknown/release/cw20_base.wasm
-cf5f55aa6e14bbf18f85b0d869e0aa65e57965276697f4d9f60200e4c7877389  target/wasm32-unknown-unknown/release/osmo_swap_manager.wasm
+41310fd978642f636ba3a97885b4821b564641c5918d5ce5b320f0af88eac7c8  target/wasm32-unknown-unknown/release/osmo_swap_manager.wasm

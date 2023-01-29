@@ -30,6 +30,17 @@ pub struct MintCache {
     pub etf_symbol: String
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SwapCache {
+    pub coin_to_revert: Coin,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct EtfNameCache {
+    pub sender: String,
+    pub etf_name: String,
+}
+
 // contracts
 pub const MANAGER_CONTRACT: Item<Addr> = Item::new("manager_contract");
 pub const SWAP_CONTRACT: Item<Addr> = Item::new("swap_contract");
@@ -46,5 +57,5 @@ pub const ETF_POOLS: Map<&str, u64> = Map::new("etf_pools");
 pub const ETF_CACHE: Item<EtfCache> = Item::new("cache");
 pub const MINT_CACHE: Item<MintCache> = Item::new("mint_cache");
 pub const INITIAL_DEPOSIT_CACHE: Item<Coin> = Item::new("initial_deposit_cache");
-pub const REVERT_SWAP_CACHE: Item<Coin> = Item::new("revert_swap_cache");
-
+pub const REVERT_SWAP_CACHE: Item<SwapCache> = Item::new("revert_swap_cache");
+pub const ETF_NAME_CACHE: Item<EtfNameCache> = Item::new("etf_name");

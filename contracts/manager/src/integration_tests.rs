@@ -260,23 +260,24 @@ mod tests {
     fn test_swaps_and_redeem() {
         with_env_setup(
             |app, wasm, signer, manager_contract_addr, swap_contract_addr, mint_contract_addr| {
-            let pool_id_1 = setup_pool(app, &signer, "uosmo", "atom");
-            let pool_id_2 = setup_pool(app, &signer, "uosmo", "usdc");
-            let pool_id_3 = setup_pool(app, &signer, "uosmo", "uion");
-            let pool_id_4 = setup_pool(app, &signer, "uosmo", "uiou");
+            let pool_id_1 = setup_pool(app, &signer, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "uosmo");
+            let pool_id_2 = setup_pool(app, &signer, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "usdc");
+            let pool_id_3 = setup_pool(app, &signer, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "uion");
+            let pool_id_4 = setup_pool(app, &signer, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "uiou");
 
             let etf_name = "WladziooEtf_First".to_string();
-            let initial_coin = Coin::new(30, "usdc");
+            let initial_coin = Coin::new(30, "uosmo");
             let swap_resp = execute_swap(
-                &wasm, manager_contract_addr.to_owned(), &signer, initial_coin, &etf_name,
+                &wasm, manager_contract_addr.to_owned(), &signer, initial_coin.clone(), &etf_name,
                 vec![
                     Route{pool_id: pool_id_1,
-                    token_out_denom: "atom".to_string()},
+                    token_out_denom: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2".to_string()},
                     Route{pool_id: pool_id_3,
-                        token_out_denom: "uion".to_string()}],
+                        token_out_denom: "uion".to_string()}
+                    ],
                         vec![Uint128::from(33u128), Uint128::from(67u128)] 
                 );
-
+  
             let result: String = swap_resp.clone().events.iter()
                 .filter(|event| event.ty == "wasm" && event.attributes[1].key == "initial_swap_received_amount")
                 .map(|p| p.attributes[1].value.clone())
@@ -300,9 +301,9 @@ mod tests {
                 .map(|p| p.attributes[1].value.clone())
                 .collect();
             
-            for ev in swap_resp.events.iter() {
-                println!("{:?}", ev);
-            }
+            // for ev in swap_resp.events.iter() {
+            //     println!("{:?}", ev);
+            // }
 
             let sum_received: u128 = swap_received_amounts.iter().map(|amnt| amnt.parse::<u128>().unwrap()).sum();
             let sum_query_ledger: u128 = query_tokens_res.tokens_per_etf.iter().map(|c| c.amount.u128()).sum();
@@ -325,30 +326,20 @@ mod tests {
 
 
             let redeem_resp = wasm
-                .execute(&manager_contract_addr, &ExecuteMsg::RedeemTokens { etf_name: etf_name }, 
+                .execute(&manager_contract_addr, &ExecuteMsg::RedeemTokens { etf_name: etf_name.to_owned() }, 
                 &vec![Coin::new(1000, "uosmo")], &signer)
             .unwrap();
             println!("{:?}", redeem_resp);
 
+            // after the tokens have been redeemed for particular swap, ledger of redeeming user should be empty (return error: Not Found when queried)
+            let query_tokens_res: Result<GetTokensResponse, osmosis_testing::RunnerError> = wasm
+            .query(&manager_contract_addr, &QueryMsg::GetTokens { 
+                sender: signer.address(), 
+                etf_type: etf_name.to_owned() });
+            assert!(query_tokens_res.is_err());
+            
             });
     }
     
 
 }
-
-
-                // let swap_resp = wasm
-
-                //     .execute(&manager_contract_addr, &ExecuteMsg::SwapTokens { 
-                //         initial_balance: Coin::new(11, "uosmo"), 
-                //         etf_swap_routes: EtfSwapRoutes { 
-                //             name: etf_name.to_owned(),
-                //             routes: vec![Route{
-                //                             pool_id: pool_id,
-                //                             token_out_denom: "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2".to_string()
-                //                     }],
-                //             ratios: vec![Uint128::from(100u128)] 
-                //         } }, 
-                //         &vec![Coin::new(11, "uosmo")], &signer)
-                //     .unwrap();
-                // println!("{:?}", swap_resp);

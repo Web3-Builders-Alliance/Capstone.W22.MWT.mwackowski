@@ -1,4 +1,5 @@
-use cosmwasm_std::{Coin, Uint128};
+use cosmwasm_schema::cw_serde;
+use cosmwasm_std::{Coin, Uint128, WasmMsg, SubMsg, Empty};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +33,9 @@ pub enum ExecuteMsg {
     },
     RedeemTokens {
         etf_name: String
+    },
+    Callback {
+        operands: Vec<SubMsg<Empty>> 
     }
 }
 
@@ -46,6 +50,12 @@ pub enum QueryMsg {
         sender: String
     }
 }
+
+
+// #[cw_serde]
+// pub enum CallbackMsg {
+//     Conjunction { operands: Vec<WasmMsg> },
+// }
 
 // We define a custom struct for each query response
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
