@@ -1,25 +1,26 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, WasmMsg, Reply, StdError, Empty, Coin, coin, Uint128, BankMsg, attr, Addr, Event,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, WasmMsg, Reply, StdError, Empty, Coin, coin, Uint128, BankMsg, attr, Addr, Event, CosmosMsg,
 };
 
 use cw2::{set_contract_version, CONTRACT};
-use cw20::MinterResponse;
-use cw_utils::{parse_reply_instantiate_data};
+use cw20::{MinterResponse, Cw20ExecuteMsg};
+
+use cw_utils::{parse_reply_instantiate_data, Expiration};
 
 use osmo_swap;
 use cw20_base;
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes, GetInitialSwapResponse};
-use crate::state::{INITIAL_DEPOSIT, INITIAL_DEPOSIT_CACHE, LEDGER, ETF_CACHE, EtfCache, SWAP_CONTRACT, INITIAL_SWAP, MINT_CONTRACTS, MINT_CACHE, MintCache, MANAGER_CONTRACT, ETF_POOLS, REVERT_SWAP_CACHE, SwapCache, ETF_NAME_CACHE, EtfNameCache};
+use crate::msg::{ExecuteMsg, GetTokensResponse, InstantiateMsg, QueryMsg, EtfSwapRoutes, GetInitialSwapResponse, GetBalanceResponse};
+use crate::state::{BALANCE, INITIAL_DEPOSIT_CACHE, LEDGER, ETF_CACHE, EtfCache, SWAP_CONTRACT, INITIAL_SWAP, MINT_CONTRACTS, MINT_CACHE, MintCache, MANAGER_CONTRACT, ETF_POOLS, REVERT_SWAP_CACHE, SwapCache, ETF_NAME_CACHE, EtfNameCache};
 use osmosis_std::types::osmosis::gamm::v1beta1::{SwapAmountInRoute, QueryPoolResponse, Pool, GammQuerier};
 use prost::DecodeError;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:counter_manager";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const MAP_KEY:&str = "0";
+
 
 const INSTANTIATE_SWAP_REPLY_ID:u64 = 1;
 const INSTANTIATE_CW20_REPLY_ID:u64 = 2;
@@ -27,7 +28,7 @@ const EXECUTE_SWAP_REPLY_ID:u64 = 3;
 const EXECUTE_SWAPS_REPLY_ID:u64 = 4;
 const EXECUTE_REVERT_SWAPS_REPLY_ID: u64 = 5;
 const EXECUTE_CONJUNCTION_SWAPS_REPLY_ID: u64 = 6;
-// const EXECUTE_MINT_TOKENS_REPLY_ID:u64 = 5;
+const EXECUTE_REDEEM_SWAP_REPLY_ID:u64 = 7;
 
 const OSMO_ATOM_POOL_ID: u64 = 1;
 const OSMO_USDC_POOL_ID: u64 = 2;
@@ -59,13 +60,7 @@ pub fn execute(
             => execute_instantiate_cw20(deps, info, env, code_id, etf_name, etf_symbol
         ),
         ExecuteMsg::SwapTokens { initial_balance, etf_swap_routes} 
-            => try_execute_swap_exact_amount_in(deps, env,info.sender.to_string(), etf_swap_routes,initial_balance
-        ),
-        ExecuteMsg::MintTokens {amount_to_mint, mint_contract_address} 
-            => execute_mint_tokens(info.sender.to_string(), amount_to_mint, mint_contract_address
-        ),
-        ExecuteMsg::QueryMintTokens {sender, mint_contract} 
-            => get_token_balance(deps, info, mint_contract, sender
+            => try_execute_swap_exact_amount_in(deps, env, info, etf_swap_routes,initial_balance
         ),
         ExecuteMsg::RedeemTokens {etf_name} 
             => redeem_tokens(deps, info, env, etf_name
@@ -130,7 +125,8 @@ pub fn execute_instantiate_cw20(
 pub fn try_execute_swap_exact_amount_in(
     deps: DepsMut, 
     _env: Env,
-    sender: String,
+    info: MessageInfo,
+
     etf_swap_routes: EtfSwapRoutes,
     deposit: Coin,
     // tokens_to_swap: Vec<Coin>
@@ -150,30 +146,36 @@ pub fn try_execute_swap_exact_amount_in(
     if ratios_sum != Uint128::from(100u128) {
         return Err(ContractError::InvalidRatio{});
     }
+    if !info.funds.iter().any(|i| i.denom == deposit.denom && i.amount >= deposit.amount) {
+        return Err(ContractError::DepositNotFound { });
+    }
+    // if deposit != info.funds[0] {
+    //     return Err(ContractError::DepositNotFound{})
+    // }
+    if !vec!["uosmo", "usdc"].iter().any(|&i| i == deposit.denom) {
+        return Err(ContractError::InvalidDepositDenom {val: deposit.denom.clone()});
+    }
 
+    let sender = info.sender.clone().to_string();
     let swap_contract_addr = SWAP_CONTRACT.load(deps.storage)?;
-    let bank_msg = BankMsg::Send { to_address: swap_contract_addr.to_string(), amount: vec![deposit.clone()] };
+    let bank_msg = BankMsg::Send { to_address: swap_contract_addr.to_string(), amount: info.funds };
 
     // let's keep track of user's deposited USDC
     let depo_key = (sender.as_str(), etf_swap_routes.name.as_str());
     let new_deposit;
-    if INITIAL_DEPOSIT.has(deps.storage, depo_key.clone()){
-        let curr_deposit = INITIAL_DEPOSIT.load(deps.storage, depo_key).unwrap();        
+    if BALANCE.has(deps.storage, depo_key.clone()){
+        let curr_deposit = BALANCE.load(deps.storage, depo_key).unwrap();        
         new_deposit = coin(curr_deposit.amount.checked_add(deposit.amount).unwrap().u128(),
             curr_deposit.denom);
     } else {
         new_deposit = deposit.clone();
     }
-    INITIAL_DEPOSIT.save(deps.storage,  depo_key,  &new_deposit)?;
+    BALANCE.save(deps.storage,  depo_key,  &new_deposit)?;
 
     INITIAL_DEPOSIT_CACHE.save(deps.storage, &coin(deposit.amount.into(), deposit.denom.to_string()))?;
 
     let (deposit_token_out_denom, pool_id) = get_initial_route_params(&deposit.denom)?;
     
-    if !vec!["uosmo", "usdc"].iter().any(|&i| i == deposit.denom) {
-        return Err(ContractError::InvalidDepositDenom {val: deposit.denom.clone()});
-    }
-
     // firstly, as most of the pools on Osmosis are based on OSMO, it is better to swap all USDC to 
     // OSMO as one transaction in the first place
 
@@ -190,38 +192,16 @@ pub fn try_execute_swap_exact_amount_in(
 }
 
 
-fn execute_mint_tokens(        
-    recipient: String,
-    amount_to_mint: Uint128,
-    mint_contract_address: String,
-) -> Result<Response, ContractError> { 
-
-    let execute_message = WasmMsg::Execute {
-        contract_addr: mint_contract_address.to_string(),
-        funds: vec![],
-        msg: to_binary(&cw20_base::msg::ExecuteMsg::Mint {
-            recipient: recipient.to_owned(),
-            amount: amount_to_mint,
-        }).unwrap()
-    };
-    Ok(Response::new()
-        .add_attributes(vec![
-            attr("execute_mint_tokens_amount", amount_to_mint),
-            attr("execute_mint_tokens_recipient", &recipient),
-        ])
-        .add_message(execute_message))
-}
-
 fn redeem_tokens(deps: DepsMut, info: MessageInfo, env: Env, etf_name: String) -> Result<Response, ContractError> { 
     if !LEDGER.has(deps.storage, (&info.sender.as_str(), &etf_name.as_str())) {
         return Err(ContractError::Unauthorized{});
-    } 
+    }
     
     let swap_addr = SWAP_CONTRACT.load(deps.storage)?;
     let ledger = LEDGER.load(deps.storage, (&info.sender.as_str(), &etf_name.as_str()))?;
 
     // find pool for reverting transactions
-    let depo_coin = INITIAL_DEPOSIT.load(deps.storage, (&info.sender.to_string(), &etf_name))?;
+    let depo_coin = BALANCE.load(deps.storage, (&info.sender.to_string(), &etf_name))?;
     let (token_out_denom, _) = get_initial_route_params(&depo_coin.denom)?;
 
     let mut submessages: Vec<SubMsg<Empty>> = vec![];
@@ -266,6 +246,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
         // EXECUTE_MINT_TOKENS_REPLY_ID => handle_mint_tokens_reply(deps, msg),
         EXECUTE_REVERT_SWAPS_REPLY_ID => handle_revert_swaps(deps, msg),
         EXECUTE_CONJUNCTION_SWAPS_REPLY_ID => handle_conjunction_swaps(deps, msg),
+        EXECUTE_REDEEM_SWAP_REPLY_ID => handle_redeem_swap(deps, msg),
         id => Err(ContractError::Std(StdError::generic_err(format!("Unknown reply id: {}", id)))),
     }
 }
@@ -308,7 +289,7 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
     let swap_addr = SWAP_CONTRACT.load(deps.storage).unwrap();
     let initial_deposit =  INITIAL_DEPOSIT_CACHE.load(deps.storage)?;
     let (initial_deposit_token_out_denom, _) = get_initial_route_params(&initial_deposit.denom).unwrap();
-    let etf_swap_routes = cache.etf_swap_routes;
+    let etf_swap_routes = cache.etf_swap_routes.to_owned();
     
     // validate if routes are passed properly before moving into execution
     for route in etf_swap_routes.clone().routes.into_iter() {
@@ -329,17 +310,19 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
             return Err(ContractError::PoolTokenNotFound { val: route.token_out_denom })
         }
     }
-
+    let depo_key = (cache.sender.as_str(), cache.etf_swap_routes.name.as_str());
     let mut submessages: std::vec::Vec<SubMsg<Empty>> = vec![];
     let mut token_in_amnt_adder = Uint128::zero();
     let init_amnt = Uint128::from(initial_amount_swapped.parse::<u128>().unwrap());
     for (i, (route, ratio)) in etf_swap_routes.clone().routes.into_iter().zip(etf_swap_routes.ratios.into_iter()).enumerate() {
-
+        let token_in_amount: Uint128;
         // no need to swap for denoms that have been received through initial swap
         if route.token_out_denom == initial_deposit_token_out_denom.to_owned() {
-            continue 
+            token_in_amount = init_amnt.checked_multiply_ratio(ratio, 100u128).unwrap();
+            token_in_amnt_adder = token_in_amnt_adder.checked_add(token_in_amount).unwrap();
+            let new_ledger = update_ledger(&deps, depo_key, token_in_amount.to_string(), initial_deposit_token_out_denom.to_owned());
+            LEDGER.save(deps.storage, depo_key, &new_ledger)?;
         } else {
-            let token_in_amount: Uint128;
             if &i == &(etf_swap_routes.routes.len() - 1) {
                 token_in_amount = init_amnt.checked_sub(token_in_amnt_adder).unwrap();
             } else {
@@ -363,11 +346,25 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
 
 
     let mint_contract_addr = MINT_CONTRACTS.load(deps.storage, etf_swap_routes.name.as_str())?;
+    // let msg_execute_mint_tokens = create_msg_execute_mint_tokens(
+    //     cache.sender.to_owned(),
+    //     initial_deposit.amount, 
+    //     mint_contract_addr);
+    let manager_addr = MANAGER_CONTRACT.load(deps.storage)?;
     let msg_execute_mint_tokens = create_msg_execute_mint_tokens(
-        cache.sender.to_owned(),
+        manager_addr.to_string(),
         initial_deposit.amount, 
-        mint_contract_addr);
+        mint_contract_addr.to_string());
 
+    // let manager_addr = MANAGER_CONTRACT.load(deps.storage)?;
+    // let msg_execute_transfer_tokens = WasmMsg::Execute {
+    //     contract_addr: mint_contract_addr.to_string(),
+    //     funds: vec![],
+    //     msg: to_binary(&Cw20ExecuteMsg::Transfer {
+    //         recipient: cache.sender.to_owned(),
+    //         amount: initial_deposit.amount,
+    //     }).unwrap()
+    // };
     return Ok(Response::default()
         .add_attributes(vec![
             attr("initial_swap_received_amount", initial_amount_swapped),
@@ -385,7 +382,6 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
  fn handle_swaps_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractError> {
 
         // Filter the result so that it returns single event value
-
     let result: String = msg.result.clone()
         .unwrap()
         .events.iter()
@@ -433,19 +429,13 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
         // .add_attribute("new_ledger_val_denom", new_ledger[0].to_owned().denom)
     
     )
-
  }
 
  fn handle_revert_swaps(deps: DepsMut, msg: Reply) -> Result<Response, ContractError> {
     let (amount_swapped_string, denom_swapped) = split_result_no_regex(parse_swap_reply(&msg));
     let amount_swapped = amount_swapped_string.parse::<u128>().unwrap();
     let mut updated: Uint128 = Uint128::zero();
-    // let swapping_finished: String = msg.result.clone()
-    //     .unwrap()
-    //     .events.iter()
-    //     .filter(|event| event.ty == "wasm-redeem" && event.attributes[4].key == "tokens_out")
-    //     .map(|p| p.attributes[4].value.clone())
-    //     .collect();
+
     if  REVERT_SWAP_CACHE.may_load(deps.storage).unwrap() != None {
         REVERT_SWAP_CACHE.update(deps.storage, |mut rev_coin| -> Result<_, ContractError> {
             updated = rev_coin.coin_to_revert.amount.checked_add(amount_swapped.into()).unwrap();
@@ -466,15 +456,15 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
         attr("revert_swap_amount_total", updated),]
         )
     )
-    
-
  }
  
  fn handle_conjunction_swaps(deps: DepsMut, msg: Reply) -> Result<Response, ContractError>  {
     let swap_addr = SWAP_CONTRACT.load(deps.storage)?;
+    let manager_addr = MANAGER_CONTRACT.load(deps.storage)?;
     let etf_name_cache = ETF_NAME_CACHE.load(deps.storage)?;
+
     // find pool for reverting transactions
-    let depo_coin = INITIAL_DEPOSIT.load(deps.storage, (&etf_name_cache.sender, &etf_name_cache.etf_name))?;
+    let depo_coin = BALANCE.load(deps.storage, (&etf_name_cache.sender, &etf_name_cache.etf_name))?;
     let (_, exit_pool_id) = get_initial_route_params(&depo_coin.denom)?;
 
     // use cache that stores all uosmo swapped back through messages created above
@@ -483,42 +473,43 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
     let execute_message = create_msg_execute_swap(
         swap_addr.to_string(), exit_pool_id, depo_coin.denom, 
         revert_swap_cache.coin_to_revert);
+    let submessage:SubMsg<Empty> = SubMsg::reply_on_success(execute_message, EXECUTE_REDEEM_SWAP_REPLY_ID);
 
-        Ok(Response::default().add_message(execute_message))
+    let mint_contract = MINT_CONTRACTS.load(deps.storage, &etf_name_cache.etf_name)?;
+    
+
+    let burn_tokens = create_msg_burn_tokens(&mint_contract, depo_coin.amount)?;
+    // BALANCE.remove(deps.storage, (&etf_name_cache.sender, &etf_name_cache.etf_name));
+    BALANCE.update(
+        deps.storage,
+        (&etf_name_cache.sender, &etf_name_cache.etf_name),
+        |balance: Option<Coin>| -> StdResult<_> {
+            Ok(coin(balance.to_owned().unwrap_or_default().amount.checked_sub(depo_coin.amount)?.into(), balance.unwrap_or_default().denom))
+        },
+    )?;
+
+
+    Ok(Response::default()
+        .add_submessage(submessage)
+        .add_message(burn_tokens)
+        // .add_message(transfer_from)
+        // .add_message(return_cw20)
+        // .add_message(burn_tokens)
+    )
  }
-    // match CONTRACTS.load(deps.storage, (&MAP_KEY, &contract_address)) {
-    //     Ok(mut state) => {
-    //         state.count = state.count.checked_add(1).unwrap();
-    //         CONTRACTS.save(deps.storage, (&MAP_KEY, &contract_address), &state)?;
-    //     }
-    //     Err(_) => {
-    //      let state = State {
-    //      address: contract_address.clone(),
-    //      count: 99,
-    //      };
-    //         CONTRACTS.save(deps.storage, (&MAP_KEY, &contract_address), &state)?;
-    //     }
-    // }
-    // CONTRACTS.update(deps.storage, (&MAP_KEY, &contract_address), |state| -> Result<_, ContractError> {
-    //     let mut i_state = state.unwrap();
-    //     i_state.count += 1;
-    //     Ok(i_state)
-    // }).unwrap();
 
+ fn handle_redeem_swap(deps: DepsMut, msg: Reply) -> Result<Response, ContractError>  {
+    let tokens_out_string = split_result_no_regex(parse_swap_reply(&msg));
+    let tokens_out = coin(tokens_out_string.0.parse::<u128>().unwrap(), tokens_out_string.1);
+    let swap_addr = SWAP_CONTRACT.load(deps.storage)?;
+    let etf_name_cache = ETF_NAME_CACHE.load(deps.storage)?;
 
-// fn handle_reset_reply(deps: DepsMut, msg: Reply) -> StdResult<Response> {
-//     //println!("{:?}", msg.clone());
-//     let contract_address = get_contract_address(&msg);
-//     let count = get_reset_count(&msg);
-
-//     CONTRACTS.update(deps.storage, (&MAP_KEY, &contract_address), |state| -> Result<_, ContractError> {
-//         let mut i_state = state.unwrap();
-//         i_state.count = count;
-//         Ok(i_state)
-//     }).unwrap();
-
-//     Ok(Response::default())
-// }
+    let send_tokens_back = create_msg_send_tokens_back(&swap_addr, vec![tokens_out.clone()], etf_name_cache.sender)?;
+    Ok(Response::default()
+        .add_message(send_tokens_back)
+        .add_attribute("denom_returned", tokens_out.denom)
+        .add_attribute("amount_returned", tokens_out.amount))
+ }
 
 // ----------------------------------- QUERIES
 // ##############################################################################
@@ -528,10 +519,12 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetTokens {sender, etf_type} => to_binary(&query_get_tokens(deps, sender, etf_type)?),
         QueryMsg::GetInitialSwap {sender} => to_binary(&query_get_initial_swap(deps, sender)?),
+        QueryMsg::GetBalance {sender, etf_type} => to_binary(&query_balance(deps, &sender, etf_type)?),
     }
 }
 
 fn query_get_tokens(deps: Deps, sender: String, etf_type: String) -> StdResult<GetTokensResponse> {
+
     let res = LEDGER.load(deps.storage, (&sender, &etf_type))?;
     Ok(GetTokensResponse { tokens_per_etf: res })
 }
@@ -541,21 +534,9 @@ fn query_get_initial_swap(deps: Deps, sender: String) -> StdResult<GetInitialSwa
     Ok(GetInitialSwapResponse {initial_swap: res})
 }
 
-fn get_token_balance(_deps: DepsMut, info: MessageInfo, mint_contract: String, addr_to_query: String) -> Result<Response, ContractError> {
-    if &addr_to_query != &info.sender {
-        return Err(ContractError::Unauthorized {  })
-    }
-
-    let execute_query_balance = WasmMsg::Execute {
-        contract_addr: mint_contract.to_string(),
-        funds: vec![],
-        msg: to_binary(&cw20_base::msg::QueryMsg::Balance {
-            address: addr_to_query.to_string(),
-        }).unwrap()
-    };
-    Ok(Response::new()
-    .add_message(execute_query_balance))
-
+fn query_balance(deps: Deps, sender: &String, etf_type: String) -> StdResult<GetBalanceResponse> {
+    let res = BALANCE.load(deps.storage, (&sender, &etf_type))?;
+    Ok(GetBalanceResponse {  balance: res })
 }
 
 // ----------------------------------- HELPER FUNCTIONS
@@ -586,11 +567,12 @@ fn create_msg_execute_swap(contract: String,
     execute_message   
 }
 
+
 fn create_msg_execute_mint_tokens(        
     recipient: String,
     amount_to_mint: Uint128,
     mint_contract_address: String,
-) -> cosmwasm_std::WasmMsg { 
+) -> WasmMsg { 
 
     WasmMsg::Execute {
         contract_addr: mint_contract_address.to_string(),
@@ -602,11 +584,62 @@ fn create_msg_execute_mint_tokens(
     }
 }
 
+
+fn create_msg_burn_tokens(
+    mint_contract_address: &String, 
+    amount: Uint128
+) -> StdResult<CosmosMsg> {
+    Ok(WasmMsg::Execute {
+        contract_addr: mint_contract_address.to_string(),
+        funds: vec![],
+        msg: to_binary(&cw20_base::msg::ExecuteMsg::Burn {
+            amount,
+        }).unwrap(),
+    }.into())
+    // let cw20_transfer_cosmos_msg: CosmosMsg = burn_msg.into();
+    // Ok(cw20_transfer_cosmos_msg)
+}
+
+
+fn get_cw20_transfer_from_msg(
+    owner: &String,
+    recipient: &String,
+    token_addr: &String,
+    token_amount: Uint128,
+) -> StdResult<CosmosMsg> {
+    // create transfer cw20 msg
+    let transfer_cw20_msg = Cw20ExecuteMsg::TransferFrom {
+        owner: owner.into(),
+        recipient: recipient.into(),
+        amount: token_amount,
+    };
+    let exec_cw20_transfer = WasmMsg::Execute {
+        contract_addr: token_addr.into(),
+        msg: to_binary(&transfer_cw20_msg)?,
+        funds: vec![],
+    };
+    let cw20_transfer_cosmos_msg: CosmosMsg = exec_cw20_transfer.into();
+    Ok(cw20_transfer_cosmos_msg)
+}
+
+fn create_msg_send_tokens_back(
+    swap_addr: &Addr, 
+    tokens_back: Vec<Coin>,
+    recipient: String
+) -> StdResult<CosmosMsg> {
+    Ok(WasmMsg::Execute {
+        contract_addr: swap_addr.to_string(),
+        funds: vec![],
+        msg: to_binary(&osmo_swap::msg::ExecuteMsg::SendTokensBack { tokens: tokens_back, recipient: recipient }).unwrap(),
+    }.into())
+}
+
 fn split_result_no_regex(coin_str: String) -> (String, String) {
     let position = coin_str.find(|c: char| !c.is_ascii_digit()).expect("did not find a split position");
     let (amount, denom) = coin_str.split_at(position);
     (amount.to_string(), denom.to_string())
 }
+
 
 fn get_initial_route_params(deposit_denom: &String) -> Result<(String, u64), ContractError> {
     let deposit_token_out_denom: String;
@@ -623,6 +656,7 @@ fn get_initial_route_params(deposit_denom: &String) -> Result<(String, u64), Con
     Ok((deposit_token_out_denom, pool_id))
 }
 
+
 fn parse_swap_reply(msg: &Reply) -> String {
     msg.result.clone()
     .unwrap()
@@ -630,4 +664,25 @@ fn parse_swap_reply(msg: &Reply) -> String {
     .filter(|event| event.ty == "token_swapped" && event.attributes[4].key == "tokens_out")
     .map(|p| p.attributes[4].value.clone())
     .collect()
+}
+
+fn update_ledger(deps: &DepsMut, depo_key: (&str, &str), amount_swapped: String, denom_swapped: String) -> Vec<Coin> {
+    let mut new_ledger: Vec<Coin> = vec![];
+    let mut found = false;
+    if LEDGER.has(deps.storage, depo_key.clone()) {
+        let curr_ledger = LEDGER.load(deps.storage, depo_key).unwrap();  
+        new_ledger = curr_ledger.clone();
+        for (i, c) in new_ledger.clone().into_iter().enumerate() {
+            if &c.denom == &denom_swapped {
+                let new_val = Uint128::from(amount_swapped.parse::<u128>().unwrap());
+                new_ledger[i] = coin(c.amount.checked_add(new_val).unwrap().u128(), c.denom);
+                found = true;
+                break
+            } 
+        }
+    }
+    if !found {
+        new_ledger.push(coin(amount_swapped.parse::<u128>().unwrap(), denom_swapped.to_owned()));
+    }
+    new_ledger
 }

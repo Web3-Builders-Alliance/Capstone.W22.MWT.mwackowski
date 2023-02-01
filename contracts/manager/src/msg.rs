@@ -23,14 +23,11 @@ pub enum ExecuteMsg {
         initial_balance: Coin,
         etf_swap_routes: EtfSwapRoutes,
     },
-    MintTokens {
-        amount_to_mint: Uint128,
-        mint_contract_address: String,
-    },
-    QueryMintTokens {
-        sender: String,
-        mint_contract: String
-    },
+    // QueryMintTokens {
+    //     sender: String,
+    //     mint_contract: String
+    // },
+
     RedeemTokens {
         etf_name: String
     },
@@ -48,7 +45,11 @@ pub enum QueryMsg {
     },
     GetInitialSwap {
         sender: String
-    }
+    },
+    GetBalance {
+        sender: String,
+        etf_type: String
+    },
 }
 
 
@@ -62,6 +63,12 @@ pub enum QueryMsg {
 pub struct GetTokensResponse {
     pub tokens_per_etf: Vec<Coin>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct GetBalanceResponse {
+    pub balance: Coin,
+}
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GetInitialSwapResponse {

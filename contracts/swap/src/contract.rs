@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     to_binary, to_vec, Binary, ContractResult, Deps, DepsMut, Empty, Env, MessageInfo, Reply,
-    Response, StdError, StdResult, SystemResult, CosmosMsg,
+    Response, StdError, StdResult, SystemResult, CosmosMsg, BankMsg, Coin as CoinStd,
 };
 use cw2::set_contract_version;
 use osmosis_std::shim::Timestamp;
@@ -71,18 +71,15 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::SetMap { key, value } => {
-            if OWNER.load(deps.storage)? != info.sender {
-                return Err(ContractError::Unauthorized {});
-            }
-            MAP.save(deps.storage, key, &value)?;
-            Ok(Response::new().add_attribute("method", "set_map"))
-        }
         ExecuteMsg::ExecuteSwapExactAmountIn { 
             routes, 
             token_in, 
             token_out_min_amount,
-          } => execute_swap_exact_amount_in(env, routes, token_in, token_out_min_amount)
+          } => execute_swap_exact_amount_in(env, routes, token_in, token_out_min_amount),
+        ExecuteMsg::SendTokensBack {
+            tokens,
+            recipient
+        } => execute_send_tokens_back(deps, env, info, tokens, recipient)
     }
 }
 
@@ -219,4 +216,20 @@ pub fn execute_swap_exact_amount_in(
     Ok(Response::new()
         .add_message(msg_create_swap)
         .add_attribute("method", "execute_swap_exact_amount_in"))
+}
+
+pub fn execute_send_tokens_back(
+    deps: DepsMut,
+    _env: Env, 
+    info: MessageInfo, 
+    tokens: Vec<CoinStd>,
+    recipient: String) -> Result<Response, ContractError> {
+    if info.sender != OWNER.load(deps.storage)? {
+        return Err(ContractError::Unauthorized{})
+    }
+
+    let bank_msg = BankMsg::Send { to_address: recipient, amount: tokens };
+
+    Ok(Response::new()
+        .add_message(bank_msg))
 }

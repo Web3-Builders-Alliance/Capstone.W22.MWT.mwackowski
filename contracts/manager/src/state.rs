@@ -49,7 +49,7 @@ pub const MINT_CONTRACTS: Map<&str, String> = Map::new("mint_contracts");
 //sender, type
 pub const LEDGER: Map<(&str, &str), Vec<Coin>> = Map::new("ledger");
 //sender, type
-pub const INITIAL_DEPOSIT: Map<(&str, &str), Coin> = Map::new("usdcbalance");
+pub const BALANCE: Map<(&str, &str), Coin> = Map::new("balance");
 pub const INITIAL_SWAP: Map<&str, Coin> = Map::new("initial_swap");
 
 pub const ETF_POOLS: Map<&str, u64> = Map::new("etf_pools");

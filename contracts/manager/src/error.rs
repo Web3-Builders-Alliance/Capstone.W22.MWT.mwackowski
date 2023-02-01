@@ -33,6 +33,9 @@ pub enum ContractError {
     #[error("Sum of swap ratios needs to be equal to 100")]
     InvalidRatio {},
 
+    #[error("Provided initial deposit does not match user's funds")]
+    DepositNotFound {},
+
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
     // Add any other custom errors you like here.

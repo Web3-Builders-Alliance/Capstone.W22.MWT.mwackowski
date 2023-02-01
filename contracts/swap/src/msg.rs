@@ -3,13 +3,10 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use osmosis_std::{shim::Timestamp, types::{cosmos::base::v1beta1::Coin, osmosis::gamm::v1beta1::Pool}};
 pub use osmosis_std::types::osmosis::epochs::v1beta1::QueryEpochsInfoResponse;
 use osmosis_std::types::osmosis::gamm::v1beta1::SwapAmountInRoute;
-pub use osmosis_std::types::osmosis::gamm::v1beta1::{
-    QueryNumPoolsResponse, QueryPoolParamsResponse, QueryPoolResponse,
-};
+pub use osmosis_std::types::osmosis::gamm::v1beta1::{QueryNumPoolsResponse, QueryPoolParamsResponse, QueryPoolResponse,};
 use osmosis_std::types::osmosis::twap::v1beta1::ArithmeticTwapResponse;
-pub use osmosis_std::types::osmosis::twap::v1beta1::{
-    ArithmeticTwapToNowRequest, ArithmeticTwapToNowResponse,
-};
+pub use osmosis_std::types::osmosis::twap::v1beta1::{ArithmeticTwapToNowRequest, ArithmeticTwapToNowResponse,};
+use cosmwasm_std::{Coin as CoinStd,};
 
 /// Message type for `instantiate` entry_point
 #[cw_serde]
@@ -20,11 +17,14 @@ pub struct InstantiateMsg {
 /// Message type for `execute` entry_point
 #[cw_serde]
 pub enum ExecuteMsg {
-    SetMap { key: String, value: String },
     ExecuteSwapExactAmountIn {
         routes: Vec<SwapAmountInRoute>,
         token_in: Option<Coin>,
         token_out_min_amount: String
+    },
+    SendTokensBack {
+        tokens: Vec<CoinStd>,
+        recipient: String
     }
 }
 
