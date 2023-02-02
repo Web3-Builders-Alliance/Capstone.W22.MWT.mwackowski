@@ -228,8 +228,11 @@ pub fn execute_send_tokens_back(
         return Err(ContractError::Unauthorized{})
     }
 
-    let bank_msg = BankMsg::Send { to_address: recipient, amount: tokens };
+    let bank_msg = BankMsg::Send { to_address: recipient.to_owned(), amount: tokens.to_owned() };
 
     Ok(Response::new()
-        .add_message(bank_msg))
+        .add_message(bank_msg)
+        .add_attribute("method", "execute_send_tokens_back")
+        .add_attribute("recipient", recipient)
+        .add_attribute("amount_sent_back", tokens[0].amount))
 }

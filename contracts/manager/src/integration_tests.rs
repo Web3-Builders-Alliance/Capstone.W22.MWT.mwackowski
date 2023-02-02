@@ -5,8 +5,10 @@ mod tests {
     use cosmwasm_std::{Addr, Coin, Empty, Uint128, BankQuery};
     use cw_multi_test::{App};
     use cw_utils::Expiration;
+    use cosmrs::proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
+
     use osmosis_testing::cosmrs::proto::cosmwasm::wasm::v1::MsgExecuteContractResponse;
-    use osmosis_testing::{Gamm, Module, OsmosisTestApp, SigningAccount, Wasm, ExecuteResponse, Account};
+    use osmosis_testing::{Gamm, Module, OsmosisTestApp, SigningAccount, Wasm, ExecuteResponse, Account, Bank, cosmrs};
     use cw20_base;
     use std::path::PathBuf;
 
@@ -317,7 +319,7 @@ mod tests {
     #[test]
     fn test_swaps_and_redeem() {
         with_env_setup(
-            |app, wasm, signer, signer2, manager_contract_addr, swap_contract_addr, mint_contract_addr| {
+            |app, wasm, signer, signer2, manager_contract_addr, _swap_contract_addr, mint_contract_addr| {
             let pool_id_1 = setup_pool(app, &signer, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "uosmo");
             let pool_id_2 = setup_pool(app, &signer, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "usdc");
             let pool_id_3 = setup_pool(app, &signer, "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2", "uion");
@@ -342,7 +344,7 @@ mod tests {
             // FIRST SIGNER - TWO SWAPS WITH DIFFERENT CONTRACTS
 
             let etf_name = "WladziooEtf_First".to_string();
-            let initial_coin = Coin::new(22, "uosmo");
+            let initial_coin = Coin::new(22000, "uosmo");
             let swap_resp = execute_swap(
                 &wasm, manager_contract_addr.to_owned(), &signer, initial_coin.clone(), &etf_name,
                 vec![
@@ -354,7 +356,7 @@ mod tests {
                         vec![Uint128::from(33u128), Uint128::from(67u128)] 
                 );
 
-            let initial_coin2 = Coin::new(33, "uosmo");
+            let initial_coin2 = Coin::new(33000, "uosmo");
             let swap_resp2 = execute_swap(
                 &wasm, manager_contract_addr.to_owned(), &signer, initial_coin2.clone(), &etf_name2,
                 vec![
@@ -367,7 +369,7 @@ mod tests {
                 );
             
             // SECOND SIGNER - ONE SWAP 
-            let initial_coin3 = Coin::new(44, "uosmo");
+            let initial_coin3 = Coin::new(44000, "uosmo");
             let swap_resp3 = execute_swap(
                 &wasm, manager_contract_addr.to_owned(), &signer2, initial_coin3.clone(), &etf_name,
                 vec![
@@ -408,8 +410,22 @@ mod tests {
                 .filter(|event| event.ty == "wasm" && event.attributes[1].key =="swap_received_amount")
                 .map(|p| p.attributes[1].value.clone())
                 .collect();             
-
-
+            let bob_balance = Bank::new(app)
+                .query_all_balances(&QueryAllBalancesRequest {
+                    address: signer.address(),
+                    pagination: None,
+                })
+                .unwrap().balances.into_iter().find(|c| c.denom == "uosmo")
+                .unwrap().amount.parse::<u128>().unwrap();
+            let alice_balance = Bank::new(app)
+                .query_all_balances(&QueryAllBalancesRequest {
+                    address: signer2.address(),
+                    pagination: None,
+                })
+                .unwrap().balances.into_iter().find(|c| c.denom == "uosmo")
+                .unwrap().amount.parse::<u128>().unwrap();
+            println!(">>> Bob balance: {:?}", bob_balance);
+            println!(">>> Alice balance: {:?}", alice_balance);
             let sum_received: u128 = swap_received_amounts.iter().map(|amnt| amnt.parse::<u128>().unwrap()).sum();
             let sum_received2: u128 = swap_received_amounts2.iter().map(|amnt| amnt.parse::<u128>().unwrap()).sum();
             let sum_received3: u128 = swap_received_amounts3.iter().map(|amnt| amnt.parse::<u128>().unwrap()).sum();
@@ -467,7 +483,6 @@ mod tests {
                 .unwrap();
             println!("{:?}", redeem_resp);
 
-
             let query_tokens_first_signer_first_swap_after_redeeming: Result<GetTokensResponse, osmosis_testing::RunnerError> = wasm
                 .query(&manager_contract_addr, &QueryMsg::GetTokens { 
                 sender: signer.address(), 
@@ -501,7 +516,17 @@ mod tests {
 
             // now minted balances should be equal to 2 coins out of initial 3
             assert_eq!(manager_minted_balance.balance + manager_minted_balance2.balance, initial_coin3.amount + initial_coin2.amount);
-            
+            // REDEEM tokens for remaining users
+            let redeem_resp = wasm
+                .execute(&manager_contract_addr, &ExecuteMsg::RedeemTokens { etf_name: etf_name2.to_owned() }, 
+                &vec![Coin::new(1000, "uosmo")], &signer)
+                .unwrap();
+
+            let redeem_resp = wasm
+                .execute(&manager_contract_addr, &ExecuteMsg::RedeemTokens { etf_name: etf_name.to_owned() }, 
+                &vec![Coin::new(1000, "uosmo")], &signer2)
+                .unwrap();
+            println!("{:?}", redeem_resp);           
             let users_balance_after_redeeming: GetBalanceResponse = wasm
                 .query(
                 &manager_contract_addr,
@@ -517,46 +542,36 @@ mod tests {
                 &manager_contract_addr,
                 &QueryMsg::GetBalance { sender: signer2.address(), etf_type: etf_name.to_owned() }
             ).unwrap();
+
             // first users balance should be now = 0, as it has been redeemed, but the rest should have the same value as before
             assert_eq!(users_balance_after_redeeming.balance.amount, Uint128::zero());
-            assert_eq!(users_balance_after_redeeming2, users_balance2);
-            assert_eq!(users_balance_after_redeeming3, users_balance3);
-            print!("users balance in storage {:?}", users_balance_after_redeeming2);
-            print!("users balance in storage2 {:?}", users_balance_after_redeeming3);
+            assert_eq!(users_balance_after_redeeming2.balance.amount, Uint128::zero());
+            assert_eq!(users_balance_after_redeeming3.balance.amount, Uint128::zero());
+            print!("users balance in storage {:?}", users_balance_after_redeeming);
+            print!("users balance in storage2 {:?}", users_balance_after_redeeming2);
+            print!("users balance in storage3 {:?}", users_balance_after_redeeming3);
 
+            let bob_balance = Bank::new(app)
+                .query_all_balances(&QueryAllBalancesRequest {
+                    address: signer.address(),
+                    pagination: None,
+                })
+                .unwrap().balances.into_iter().find(|c| c.denom == "uosmo")
+                .unwrap().amount.parse::<u128>().unwrap();
+            let alice_balance = Bank::new(app)
+                .query_all_balances(&QueryAllBalancesRequest {
+                    address: signer2.address(),
+                    pagination: None,
+                })
+                .unwrap().balances.into_iter().find(|c| c.denom == "uosmo")
+                .unwrap().amount.parse::<u128>().unwrap();
+            println!(">>> Bob balance: {:?}", bob_balance);
+            println!(">>> Alice balance: {:?}", alice_balance);
             });
+
     }
     
 
 }
-
-
-// let signers_allowance: cw20::AllowanceResponse = wasm
-// .query(
-//     &mint_contract_addr,
-//     &cw20_base::msg::QueryMsg::Allowance { owner: signer.address(), spender: manager_contract_addr.to_string() }
-// )
-// .unwrap();
-
-// let signers_allowance2: cw20::AllowanceResponse = wasm
-// .query(
-//     &mint_contract_addr,
-//     &cw20_base::msg::QueryMsg::Allowance { owner: manager_contract_addr.to_owned(), spender: signer.address() }
-// )
-// .unwrap();
-// let signers_allowance3: cw20::AllowanceResponse = wasm
-// .query(
-//     &mint_contract_addr,
-//     &cw20_base::msg::QueryMsg::Allowance { owner: mint_contract_addr.to_owned(), spender: signer.address() }
-// )
-// .unwrap();
-// let signers_allowance4: cw20::AllowanceResponse = wasm
-// .query(
-//     &mint_contract_addr,
-//     &cw20_base::msg::QueryMsg::Allowance { owner: mint_contract_addr.to_owned(), spender: manager_contract_addr.to_owned() }
-// )
-// .unwrap();
-// println!{"{:?}", signers_allowance};
-// println!{"{:?}", signers_allowance2};
-// println!{"{:?}", signers_allowance3};
-// println!{"{:?}", signers_allowance4};
+// 94999935000 99999956000
+// 94999997839 99999988558

@@ -175,7 +175,7 @@ pub fn try_execute_swap_exact_amount_in(
     INITIAL_DEPOSIT_CACHE.save(deps.storage, &coin(deposit.amount.into(), deposit.denom.to_string()))?;
 
     let (deposit_token_out_denom, pool_id) = get_initial_route_params(&deposit.denom)?;
-    
+    ETF_POOLS.save(deps.storage, &deposit_token_out_denom, &pool_id)?;
     // firstly, as most of the pools on Osmosis are based on OSMO, it is better to swap all USDC to 
     // OSMO as one transaction in the first place
 
@@ -206,6 +206,23 @@ fn redeem_tokens(deps: DepsMut, info: MessageInfo, env: Env, etf_name: String) -
 
     let mut submessages: Vec<SubMsg<Empty>> = vec![];
     for c in ledger.clone().into_iter() {
+        // no need to swap the same token back (i.e. atom to atom)
+        if &c.denom == &token_out_denom {
+            let mut updated: Uint128 = Uint128::zero();
+            if  REVERT_SWAP_CACHE.may_load(deps.storage).unwrap() != None {
+                REVERT_SWAP_CACHE.update(deps.storage, |mut rev_coin| -> Result<_, ContractError> {
+                    updated = rev_coin.coin_to_revert.amount.checked_add(c.amount.into()).unwrap();
+                    rev_coin.coin_to_revert.amount = updated;
+                    Ok(rev_coin)
+                })?;        
+            } else {
+                REVERT_SWAP_CACHE.save(deps.storage, &SwapCache{
+                 coin_to_revert: coin(c.amount.into(), c.denom.to_owned()),
+                }
+                )?
+            }
+            continue
+        }
         let pool_id = ETF_POOLS.load(deps.storage, &c.denom)?;
         let execute_message = create_msg_execute_swap(
             swap_addr.to_string(), pool_id, token_out_denom.to_string(), 
@@ -225,11 +242,8 @@ fn redeem_tokens(deps: DepsMut, info: MessageInfo, env: Env, etf_name: String) -
     }))?;
  
     Ok(Response::new()
-    // .add_submessages(submessages)
     .add_submessage(SubMsg::reply_on_success(callback_message, EXECUTE_CONJUNCTION_SWAPS_REPLY_ID))
-    // .add_event(Event::new("redeem")
-    //     .add_attribute("etf_name", &etf_name)
-    // )
+    .add_attribute("method", "redeem_tokens")
 )
 }
 
@@ -434,6 +448,8 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
  fn handle_revert_swaps(deps: DepsMut, msg: Reply) -> Result<Response, ContractError> {
     let (amount_swapped_string, denom_swapped) = split_result_no_regex(parse_swap_reply(&msg));
     let amount_swapped = amount_swapped_string.parse::<u128>().unwrap();
+    
+    // TODO - convert this part to a function
     let mut updated: Uint128 = Uint128::zero();
 
     if  REVERT_SWAP_CACHE.may_load(deps.storage).unwrap() != None {
@@ -460,7 +476,7 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
  
  fn handle_conjunction_swaps(deps: DepsMut, msg: Reply) -> Result<Response, ContractError>  {
     let swap_addr = SWAP_CONTRACT.load(deps.storage)?;
-    let manager_addr = MANAGER_CONTRACT.load(deps.storage)?;
+    // let manager_addr = MANAGER_CONTRACT.load(deps.storage)?;
     let etf_name_cache = ETF_NAME_CACHE.load(deps.storage)?;
 
     // find pool for reverting transactions
@@ -504,11 +520,14 @@ fn handle_swap_reply(deps: DepsMut, msg: Reply) -> Result<Response, ContractErro
     let swap_addr = SWAP_CONTRACT.load(deps.storage)?;
     let etf_name_cache = ETF_NAME_CACHE.load(deps.storage)?;
 
-    let send_tokens_back = create_msg_send_tokens_back(&swap_addr, vec![tokens_out.clone()], etf_name_cache.sender)?;
+    let send_tokens_back = create_msg_send_tokens_back(&swap_addr, vec![tokens_out.clone()], etf_name_cache.sender.to_owned())?;
+    REVERT_SWAP_CACHE.remove(deps.storage);
+    ETF_NAME_CACHE.remove(deps.storage);
     Ok(Response::default()
         .add_message(send_tokens_back)
         .add_attribute("denom_returned", tokens_out.denom)
-        .add_attribute("amount_returned", tokens_out.amount))
+        .add_attribute("amount_returned", tokens_out.amount)
+        .add_attribute("returned_to", etf_name_cache.sender))
  }
 
 // ----------------------------------- QUERIES
@@ -685,4 +704,22 @@ fn update_ledger(deps: &DepsMut, depo_key: (&str, &str), amount_swapped: String,
         new_ledger.push(coin(amount_swapped.parse::<u128>().unwrap(), denom_swapped.to_owned()));
     }
     new_ledger
+}
+
+fn update_revert_swap_cache<'a>(deps: DepsMut<'a>, amount_swapped: u128, denom_swapped: &'a String) -> (DepsMut<'a>, Uint128) {
+    let mut updated: Uint128 = Uint128::zero();
+
+    if  REVERT_SWAP_CACHE.may_load(deps.storage).unwrap() != None {
+        REVERT_SWAP_CACHE.update(deps.storage, |mut rev_coin| -> Result<_, ContractError> {
+            updated = rev_coin.coin_to_revert.amount.checked_add(amount_swapped.into()).unwrap();
+            rev_coin.coin_to_revert.amount = updated;
+            Ok(rev_coin)
+        }).unwrap();        
+    } else {
+        REVERT_SWAP_CACHE.save(deps.storage, &SwapCache{
+         coin_to_revert: coin(amount_swapped, denom_swapped.to_owned()),
+        }
+        ).unwrap();
+    };
+    (deps, updated)
 }
