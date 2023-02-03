@@ -2,20 +2,14 @@
 mod tests {
     use crate::helpers::ManagerContract;
     use crate::msg::{ExecuteMsg, GetTokensResponse, QueryMsg, EtfSwapRoutes, InstantiateMsg, Route, GetInitialSwapResponse, GetBalanceResponse};
-    use cosmwasm_std::{Addr, Coin, Empty, Uint128, BankQuery};
+    use cosmwasm_std::{Coin, Uint128};
     use cw_multi_test::{App};
-    use cw_utils::Expiration;
     use cosmrs::proto::cosmos::bank::v1beta1::QueryAllBalancesRequest;
-
     use osmosis_testing::cosmrs::proto::cosmwasm::wasm::v1::MsgExecuteContractResponse;
     use osmosis_testing::{Gamm, Module, OsmosisTestApp, SigningAccount, Wasm, ExecuteResponse, Account, Bank, cosmrs};
     use cw20_base;
     use std::path::PathBuf;
 
-    const USER: &str = "USER";
-    const ADMIN: &str = "ADMIN";
-    const NATIVE_DENOM: &str = "denom";
-   
 
     fn get_wasm_byte_code(filename: &str) -> Vec<u8> {
         let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -27,12 +21,6 @@ mod tests {
                 .join(filename),
         )
         .unwrap()
-    }
-
-    fn get_tokens(app: &App, manager_contract: &ManagerContract, sender: String, etf_type: String ) -> GetTokensResponse {
-        app.wrap()
-            .query_wasm_smart(manager_contract.addr(), &QueryMsg::GetTokens { sender: sender, etf_type: etf_type })
-            .unwrap()
     }
  
     fn parse_init_response(swap_response: ExecuteResponse<MsgExecuteContractResponse>) -> String {
@@ -570,8 +558,5 @@ mod tests {
             });
 
     }
-    
 
 }
-// 94999935000 99999956000
-// 94999997839 99999988558
